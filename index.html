@@ -69,6 +69,7 @@
   #tcLeft   { left: 4%;  bottom: 12%; width: 15%; aspect-ratio: 1; }
   #tcRight  { left: 21%; bottom: 12%; width: 15%; aspect-ratio: 1; }
   #tcJump   { right: 22%; bottom: 26%; width: 15%; aspect-ratio: 1; background: rgba(120,200,255,0.12); }
+  #tcDash   { right: 40%; bottom: 12%; width: 13%; aspect-ratio: 1; background: rgba(200,120,255,0.16); font-size: 12px; }
   #tcShoot  { right: 4%;  bottom: 12%; width: 17%; aspect-ratio: 1; background: rgba(255,180,0,0.18); }
   #tcPause  {
     top: 3%; right: 3%; width: 9%; aspect-ratio: 1;
@@ -111,6 +112,7 @@
     <div id="tcLeft" class="tcBtn">◀</div>
     <div id="tcRight" class="tcBtn">▶</div>
     <div id="tcJump" class="tcBtn">▲</div>
+    <div id="tcDash" class="tcBtn">DASH</div>
     <div id="tcShoot" class="tcBtn">●</div>
     <div id="tcPause" class="tcBtn">II</div>
   </div>
@@ -123,7 +125,7 @@
 </div>
 
 <div id="footerInfo">
-  <b>&larr;/&rarr; ou A/D</b> andar &nbsp; <b>Espaço/W/&uarr;</b> pular &nbsp; <b>J/Z</b> atirar &nbsp; <b>Esc</b> pausar &nbsp; · feito por Caetano (VCtv)
+  <b>&larr;/&rarr; ou A/D</b> andar &nbsp; <b>Espaço/W/&uarr;</b> pular &nbsp; <b>J/Z</b> atirar &nbsp; <b>Shift</b> dash &nbsp; <b>Esc</b> pausar &nbsp; · feito por Caetano
 </div>
 
 <script>
@@ -391,6 +393,7 @@ class SFX {
   hurt()       { this.tone(190, 0.16, 'sawtooth', 0.12, 70); }
   explosion()  { this.noise(0.28, 0.24, 1000); }
   jump()       { this.tone(300, 0.12, 'square', 0.08, 520); }
+  dash()       { this.tone(200, 0.1, 'sawtooth', 0.09, 700); }
   pickup()     { this.tone(760, 0.07, 'square', 0.07, 1100); }
   uiMove()     { this.tone(440, 0.05, 'square', 0.05, 560); }
   uiConfirm()  { this.tone(660, 0.09, 'square', 0.08, 900); }
@@ -643,17 +646,39 @@ const GROUND_Y = H - 90;
 const GRAVITY = 2000;
 const MAX_FALL = 950;
 
-const LEVELS_PER_WORLD = 10;
+const LEVELS_PER_WORLD = 100;
+const MINI_BOSS_INTERVAL = 10;
 
 const WORLDS = [
-  { name: 'RUÍNAS',            skyCorrupt: ['#161623', '#241a35'], skyClear: ['#2a6fb0', '#8fd0e8'] },
-  { name: 'SETOR INDUSTRIAL',  skyCorrupt: ['#1c1810', '#2c2414'], skyClear: ['#6f7f2a', '#c8de8f'] },
-  { name: 'PÂNTANO TÓXICO',    skyCorrupt: ['#0f2018', '#0f3226'], skyClear: ['#1c8c6f', '#8fe0c8'] },
-  { name: 'CIDADE FANTASMA',   skyCorrupt: ['#14141c', '#1c1c2c'], skyClear: ['#4f5a8c', '#a8b0d8'] },
-  { name: 'NÚCLEO FINAL',      skyCorrupt: ['#280f10', '#3a0f14'], skyClear: ['#8c2a54', '#e8a0c0'] },
+  { name: 'RUÍNAS',            skyCorrupt: ['#161623', '#241a35'], skyClear: ['#2a6fb0', '#8fd0e8'],
+    groundCorrupt: '#33313d', groundClear: '#3a4a2c', fog: '#6a6a7a', atmosphere: 'embers' },
+  { name: 'SETOR INDUSTRIAL',  skyCorrupt: ['#1c1810', '#2c2414'], skyClear: ['#6f7f2a', '#c8de8f'],
+    groundCorrupt: '#2b2620', groundClear: '#4a4a2c', fog: '#8a7a4a', atmosphere: 'smoke' },
+  { name: 'PÂNTANO TÓXICO',    skyCorrupt: ['#0f2018', '#0f3226'], skyClear: ['#1c8c6f', '#8fe0c8'],
+    groundCorrupt: '#12261c', groundClear: '#1f4a38', fog: '#3a8c6f', atmosphere: 'bubbles' },
+  { name: 'CIDADE FANTASMA',   skyCorrupt: ['#14141c', '#1c1c2c'], skyClear: ['#4f5a8c', '#a8b0d8'],
+    groundCorrupt: '#1a1a24', groundClear: '#33334a', fog: '#4a4a6a', atmosphere: 'fog' },
+  { name: 'NÚCLEO FINAL',      skyCorrupt: ['#280f10', '#3a0f14'], skyClear: ['#8c2a54', '#e8a0c0'],
+    groundCorrupt: '#2a1012', groundClear: '#4a1c2c', fog: '#c02040', atmosphere: 'embers' },
 ];
 
 const TOTAL_LEVELS = WORLDS.length * LEVELS_PER_WORLD;
+const TOTAL_PAGES = TOTAL_LEVELS / MINI_BOSS_INTERVAL; // páginas de 10 fases pro hub
+
+// ============================================================
+// ARQUÉTIPOS DE CHEFES (comportamentos distintos, ciclam a cada 10 fases)
+// ============================================================
+
+const BOSS_ARCHETYPES = [
+  { key: 'hover_spread', spriteKey: 'Drony', label: 'ALFA', hue: 0 },
+  { key: 'dash_queen',   spriteKey: 'Plany', label: 'RAINHA VOADORA', hue: 200 },
+  { key: 'ground_charger', spriteKey: 'ducky', label: 'TANQUE DE ASSALTO', hue: 20 },
+  { key: 'summoner',     spriteKey: 'Drony', label: 'INVOCADOR', hue: 120 },
+  { key: 'corrupted_twin', spriteKey: 'Boom', label: 'GÊMEO CORROMPIDO', hue: 320 },
+];
+
+// chefe final único da fase 500, muito mais forte que um guardião comum
+const FINAL_BOSS_ARCHETYPE = { key: 'final_overlord', spriteKey: 'Drony', label: 'NÚCLEO DA CORRUPÇÃO', hue: 0 };
 
 // ============================================================
 // CUTSCENES (cenas narrativas entre partes do jogo)
@@ -702,8 +727,8 @@ const FINAL_CUTSCENE = [
     'A torreta que ninguém apostava, salvou tudo.',
   ], accent: '#7be04a', sprite: 'predio_branco' },
   { title: 'OBRIGADO POR JOGAR TURETY', lines: [
-    'Um jogo criado por Caetano (VCtv).',
-    'Você completou as 50 fases e reconstruiu',
+    'Um jogo criado por Caetano.',
+    'Você completou as 500 fases e reconstruiu',
     'o mundo inteiro. Valeu por jogar até aqui!',
   ], accent: '#7fe8ff', sprite: 'Boom' },
 ];
@@ -731,8 +756,21 @@ function worldIndexForLevel(id) {
   return Math.min(WORLDS.length - 1, Math.floor((id - 1) / LEVELS_PER_WORLD));
 }
 
-function isBossLevel(id) {
+function isMiniBoss(id) {
+  return id % MINI_BOSS_INTERVAL === 0;
+}
+
+function isWorldGuardian(id) {
   return id % LEVELS_PER_WORLD === 0;
+}
+
+function bossSequenceIndex(id) {
+  return Math.round(id / MINI_BOSS_INTERVAL); // 1, 2, 3... até 50
+}
+
+function bossArchetypeFor(id) {
+  const seq = bossSequenceIndex(id);
+  return BOSS_ARCHETYPES[(seq - 1) % BOSS_ARCHETYPES.length];
 }
 
 const HAND_LEVELS = {
@@ -812,13 +850,21 @@ function proceduralName(id, rand) {
 
 const levelCache = {};
 
+function difficultyFactor(id) {
+  return Math.min(7, 1 + Math.sqrt(id - 1) * 0.32);
+}
+
+function bossTierScale(seq) {
+  return Math.min(6, 1 + Math.sqrt(seq) * 0.5);
+}
+
 function getLevelDef(id) {
   if (levelCache[id]) return levelCache[id];
 
   const world = worldIndexForLevel(id);
   const worldDef = WORLDS[world];
-  const boss = isBossLevel(id);
-  const tier = world + 1;
+  const miniBoss = isMiniBoss(id);
+  const guardian = isWorldGuardian(id);
   let def;
 
   if (HAND_LEVELS[id]) {
@@ -827,13 +873,14 @@ function getLevelDef(id) {
       ...hand,
       world,
       isBoss: false,
+      isGuardian: false,
       isFinal: false,
       skyCorrupt: worldDef.skyCorrupt,
       skyClear: worldDef.skyClear,
     };
   } else {
     const rand = seededRandom(id * 7919 + 13);
-    const length = 1700 + id * 16 + Math.floor(rand() * 220);
+    const length = 1700 + Math.min(id, 200) * 14 + Math.floor(rand() * 220);
 
     const numSolids = 1 + Math.floor(rand() * 3);
     const solids = [];
@@ -844,37 +891,63 @@ function getLevelDef(id) {
     }
 
     const spawns = [];
-    const enemyCount = Math.min(9, (boss ? 3 : 3) + Math.floor(id / 6));
+    const enemyCount = Math.min(11, 3 + Math.floor(id / 8));
+
+    // pool de inimigos cresce em variedade conforme a fase avança
     const pool = ['ducky', 'ducky', 'plany'];
-    if (id > 8) pool.push('drony');
-    if (id > 20) pool.push('plany', 'drony');
-    if (id > 35) pool.push('drony');
+    if (id > 6) pool.push('drony');
+    if (id > 18) pool.push('sniper');
+    if (id > 30) pool.push('tankuda');
+    if (id > 45) pool.push('bomber');
+    if (id > 70) pool.push('drony', 'sniper');
+    if (id > 120) pool.push('tankuda', 'bomber');
+    if (id > 200) pool.push('swarmling', 'swarmling');
 
     for (let i = 0; i < enemyCount; i++) {
       const t = pool[Math.floor(rand() * pool.length)];
       const ex = Math.round(300 + (length - 650) * ((i + 1) / (enemyCount + 1)));
-      if (t === 'ducky') spawns.push({ type: 'ducky', x: ex });
-      else spawns.push({ type: t, x: ex, y: 205 + Math.floor(rand() * 65) });
+      if (t === 'swarmling') {
+        // enxame vem em grupinho de 3
+        for (let k = 0; k < 3; k++) {
+          spawns.push({ type: 'swarmling', x: ex + k * 26 });
+        }
+      } else if (t === 'ducky' || t === 'tankuda') {
+        spawns.push({ type: t, x: ex });
+      } else {
+        spawns.push({ type: t, x: ex, y: 190 + Math.floor(rand() * 90) });
+      }
     }
 
-    if (boss) {
+    if (miniBoss) {
       spawns.push({ type: 'boss', x: length - 260, y: 200 });
     }
 
-    const rewardMoney = 20 + id * 4 + (boss ? 40 : 0);
-    const rewardXP = 26 + id * 5 + (boss ? 60 : 0);
+    const seq = bossSequenceIndex(id);
+    const isFinalBoss = id === TOTAL_LEVELS;
+    const bossMult = isFinalBoss ? 3.2 : (guardian ? 1.6 : 1);
+    const rewardMoney = Math.round((18 + id * 3) * (miniBoss ? 1.8 * bossMult : 1));
+    const rewardXP = Math.round((24 + id * 4) * (miniBoss ? 1.8 * bossMult : 1));
+
+    const archetype = isFinalBoss ? FINAL_BOSS_ARCHETYPE
+                     : guardian ? BOSS_ARCHETYPES[world % BOSS_ARCHETYPES.length]
+                     : (miniBoss ? bossArchetypeFor(id) : null);
 
     def = {
       id,
-      name: boss ? `GUARDIÃO: ${worldDef.name}` : proceduralName(id, rand),
+      name: isFinalBoss ? 'NÚCLEO DA CORRUPÇÃO'
+           : guardian ? `GUARDIÃO DE ${worldDef.name}`
+           : miniBoss ? `CHEFE ${archetype.label}`
+           : proceduralName(id, rand),
       length, world,
-      isBoss: boss,
-      isFinal: id === TOTAL_LEVELS,
+      isBoss: miniBoss,
+      isGuardian: guardian,
+      isFinal: isFinalBoss,
       skyCorrupt: worldDef.skyCorrupt,
       skyClear: worldDef.skyClear,
       solids, spawns,
       rewardMoney, rewardXP,
-      bossTier: tier,
+      bossArchetype: archetype ? archetype.key : null,
+      bossTierScale: bossTierScale(seq) * bossMult,
     };
   }
 
@@ -917,6 +990,9 @@ function makePlayer(charKey) {
     runXP: 0,
     runMoney: 0,
     rapidFireT: 0,
+    dashCooldown: 0,
+    dashT: 0,
+    dashTrail: 0,
   };
 }
 
@@ -924,20 +1000,16 @@ function makePlayer(charKey) {
 // INIMIGOS
 // ============================================================
 
-function difficultyFactor(id) {
-  return 1 + (id - 1) * 0.045;
-}
-
 function makeDucky(x, id = 1) {
   const f = difficultyFactor(id);
   return {
     type: 'ducky', spriteKey: 'ducky',
     x, y: GROUND_Y - 46, w: 40, h: 50,
-    vx: -(55 + Math.min(45, id * 0.7)), facing: -1,
-    hp: Math.round(30 * f), maxHp: Math.round(30 * f),
+    vx: -(55 + Math.min(45, id * 0.4)), facing: -1,
+    hp: Math.round(28 * f), maxHp: Math.round(28 * f),
     patrolMin: x - 140, patrolMax: x + 140,
-    shootTimer: 1.0, shootDelay: Math.max(0.65, 1.7 - id * 0.017),
-    dmg: Math.round(9 * Math.min(2.4, f)),
+    shootTimer: 1.0, shootDelay: Math.max(0.55, 1.6 - id * 0.006),
+    dmg: Math.round(9 * f),
     xpReward: 12, moneyReward: 6,
     anim: new Anim('ducky', Math.random() * 2),
     alive: true, hitFlash: 0, deathTimer: 0,
@@ -949,11 +1021,11 @@ function makePlany(x, y, id = 1) {
   return {
     type: 'plany', spriteKey: 'Plany',
     x, y, baseY: y, w: 48, h: 46,
-    vx: -(85 + Math.min(55, id * 0.9)), facing: -1,
-    hp: Math.round(22 * f), maxHp: Math.round(22 * f),
+    vx: -(85 + Math.min(55, id * 0.5)), facing: -1,
+    hp: Math.round(20 * f), maxHp: Math.round(20 * f),
     patrolMin: x - 220, patrolMax: x + 220,
-    shootTimer: 1.3, shootDelay: Math.max(0.75, 1.9 - id * 0.018),
-    dmg: Math.round(9 * Math.min(2.4, f)),
+    shootTimer: 1.3, shootDelay: Math.max(0.6, 1.8 - id * 0.007),
+    dmg: Math.round(9 * f),
     xpReward: 16, moneyReward: 9,
     anim: new Anim('Plany', Math.random() * 2),
     alive: true, hitFlash: 0, deathTimer: 0,
@@ -967,9 +1039,9 @@ function makeDrony(x, y, id = 1) {
     type: 'drony', spriteKey: 'Drony',
     x, y, baseY: y, w: 60, h: 32,
     vx: 0, facing: -1,
-    hp: Math.round(36 * f), maxHp: Math.round(36 * f),
-    shootTimer: 0.9, shootDelay: Math.max(0.65, 1.4 - id * 0.014),
-    dmg: Math.round(10 * Math.min(2.4, f)),
+    hp: Math.round(34 * f), maxHp: Math.round(34 * f),
+    shootTimer: 0.9, shootDelay: Math.max(0.5, 1.3 - id * 0.006),
+    dmg: Math.round(10 * f),
     xpReward: 20, moneyReward: 12,
     anim: new Anim('Drony', Math.random() * 2),
     alive: true, hitFlash: 0, deathTimer: 0,
@@ -977,31 +1049,114 @@ function makeDrony(x, y, id = 1) {
   };
 }
 
-function makeBoss(x, y, tier = 1) {
-  const hp = 130 + tier * 65;
+// atirador de precisão: fica a distância, pisca antes de atirar uma bala rápida mirada exatamente no jogador
+function makeSniper(x, y, id = 1) {
+  const f = difficultyFactor(id);
   return {
-    type: 'boss', spriteKey: 'Drony', boss: true,
-    x, y, baseY: y, w: 100 + tier * 3, h: 54 + tier * 2,
-    vx: 0, facing: -1,
-    hp, maxHp: hp,
-    shootTimer: 1.5, shootDelay: Math.max(0.6, 1.7 - tier * 0.17),
-    dmg: 12 + tier * 3,
-    xpReward: 70 + tier * 28, moneyReward: 45 + tier * 18,
+    type: 'sniper', spriteKey: 'Plany',
+    x, y, baseY: y, w: 44, h: 42,
+    vx: -60, facing: -1,
+    hp: Math.round(18 * f), maxHp: Math.round(18 * f),
+    patrolMin: x - 100, patrolMax: x + 100,
+    shootTimer: 1.6, shootDelay: Math.max(1.1, 2.2 - id * 0.005),
+    dmg: Math.round(14 * f),
+    telegraph: 0,
+    xpReward: 18, moneyReward: 11,
+    anim: new Anim('Plany', Math.random() * 2),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    wobble: Math.random() * 10,
+    hueTint: 260,
+  };
+}
+
+// tanque blindado: lento, resistente, avança em linha reta e da dano de contato
+function makeTankuda(x, id = 1) {
+  const f = difficultyFactor(id);
+  return {
+    type: 'tankuda', spriteKey: 'ducky',
+    x, y: GROUND_Y - 54, w: 52, h: 58,
+    vx: -38, facing: -1,
+    hp: Math.round(70 * f), maxHp: Math.round(70 * f),
+    patrolMin: x - 160, patrolMax: x + 160,
+    shootTimer: 1.8, shootDelay: Math.max(1.2, 2.3 - id * 0.005),
+    dmg: Math.round(11 * f),
+    contactDamage: Math.round(14 * f),
+    contactCooldown: 0,
+    xpReward: 26, moneyReward: 16,
+    anim: new Anim('ducky', Math.random() * 2),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    hueTint: 200,
+  };
+}
+
+// bombardeiro: solta bombas em arco que explodem no chão
+function makeBomber(x, y, id = 1) {
+  const f = difficultyFactor(id);
+  return {
+    type: 'bomber', spriteKey: 'Drony',
+    x, y, baseY: y, w: 58, h: 34,
+    vx: -50, facing: -1,
+    hp: Math.round(30 * f), maxHp: Math.round(30 * f),
+    patrolMin: x - 180, patrolMax: x + 180,
+    shootTimer: 1.4, shootDelay: Math.max(1.0, 2.0 - id * 0.005),
+    dmg: Math.round(15 * f),
+    xpReward: 22, moneyReward: 14,
     anim: new Anim('Drony', Math.random() * 2),
     alive: true, hitFlash: 0, deathTimer: 0,
     wobble: Math.random() * 10,
+    hueTint: 20,
+  };
+}
+
+// enxame: pequeno, rapido, sem tiro, so avanca e da dano de contato. vem em grupo
+function makeSwarmling(x, id = 1) {
+  const f = difficultyFactor(id);
+  return {
+    type: 'swarmling', spriteKey: 'ducky',
+    x, y: GROUND_Y - 30, w: 24, h: 28,
+    vx: -110, facing: -1,
+    hp: Math.round(10 * f), maxHp: Math.round(10 * f),
+    contactDamage: Math.round(8 * f),
+    contactCooldown: 0,
+    xpReward: 6, moneyReward: 4,
+    anim: new Anim('ducky', Math.random() * 3),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    hueTint: 340,
+  };
+}
+
+function makeBoss(x, y, archetypeKey, tierScale = 1) {
+  const archetype = [...BOSS_ARCHETYPES, FINAL_BOSS_ARCHETYPE].find(a => a.key === archetypeKey) || BOSS_ARCHETYPES[0];
+  const hp = Math.round(140 * tierScale);
+  return {
+    type: 'boss', spriteKey: archetype.spriteKey, boss: true,
+    archetype: archetype.key, archetypeLabel: archetype.label, hueTint: archetype.hue,
+    x, y, baseY: y, w: 90 + tierScale * 8, h: 56 + tierScale * 4,
+    vx: 0, facing: -1,
+    hp, maxHp: hp,
+    shootTimer: 1.5, shootDelay: Math.max(0.55, 1.6 - tierScale * 0.13),
+    dmg: Math.round(11 * tierScale),
+    xpReward: Math.round(60 * tierScale), moneyReward: Math.round(40 * tierScale),
+    anim: new Anim(archetype.spriteKey, Math.random() * 2),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    wobble: Math.random() * 10,
     patrolMin: x - 260, patrolMax: x + 40,
-    phase: 0, tier,
+    phase: 0, dashT: 0, dashCooldown: 2, summonCooldown: 3,
+    tierScale,
   };
 }
 
 function spawnEnemyFromDef(d, levelDef) {
   const id = (levelDef && levelDef.id) || 1;
   switch (d.type) {
-    case 'ducky': return makeDucky(d.x, id);
-    case 'plany': return makePlany(d.x, d.y, id);
-    case 'drony': return makeDrony(d.x, d.y, id);
-    case 'boss':  return makeBoss(d.x, d.y, (levelDef && levelDef.bossTier) || 1);
+    case 'ducky':     return makeDucky(d.x, id);
+    case 'plany':     return makePlany(d.x, d.y, id);
+    case 'drony':     return makeDrony(d.x, d.y, id);
+    case 'sniper':    return makeSniper(d.x, d.y, id);
+    case 'tankuda':   return makeTankuda(d.x, id);
+    case 'bomber':    return makeBomber(d.x, d.y, id);
+    case 'swarmling': return makeSwarmling(d.x, id);
+    case 'boss':      return makeBoss(d.x, d.y, (levelDef && levelDef.bossArchetype) || 'hover_spread', (levelDef && levelDef.bossTierScale) || 1);
   }
   return null;
 }
@@ -1164,6 +1319,7 @@ function bindTouchButton(elId, code) {
 bindTouchButton('tcLeft', 'ArrowLeft');
 bindTouchButton('tcRight', 'ArrowRight');
 bindTouchButton('tcJump', 'Space');
+bindTouchButton('tcDash', 'ShiftLeft');
 bindTouchButton('tcShoot', 'KeyJ');
 
 document.getElementById('tcPause').addEventListener('pointerdown', (e) => {
@@ -1269,7 +1425,7 @@ function restartCurrentLevel() {
 }
 
 function goToHub() {
-  hubWorld = worldIndexForLevel(save.unlockedLevel);
+  hubPage = Math.floor((save.unlockedLevel - 1) / MINI_BOSS_INTERVAL);
   state = STATE.HUB;
 }
 
@@ -1340,6 +1496,21 @@ function updatePlayer(dt) {
     p.jumpBuffer = 0;
     p.onGround = false;
     sfx.jump();
+  }
+
+  // dash: investida rápida com invencibilidade breve (Shift)
+  p.dashCooldown = Math.max(0, (p.dashCooldown || 0) - dt);
+  p.dashT = Math.max(0, (p.dashT || 0) - dt);
+  if ((pressed('ShiftLeft') || pressed('ShiftRight')) && p.dashCooldown <= 0) {
+    p.dashT = 0.16;
+    p.dashCooldown = 1.3;
+    p.invuln = Math.max(p.invuln, 0.28);
+    p.dashTrail = 6;
+    sfx.dash();
+    addShake(3, 0.08);
+  }
+  if (p.dashT > 0) {
+    p.vx = p.facing * maxSpeed * 2.4;
   }
 
   p.vy += GRAVITY * dt;
@@ -1415,12 +1586,47 @@ function triggerGameOver() {
 // UPDATE: INIMIGOS (inclui o chefão)
 // ============================================================
 
+function fireAimedBullet(en, speed, w, h) {
+  const cx = en.x + en.w / 2, cy = en.y + en.h / 2;
+  const dx = (player.x + player.w / 2) - cx;
+  const dy = (player.y + player.h / 2) - cy;
+  const dist = Math.max(1, Math.hypot(dx, dy));
+  enemyBullets.push({
+    x: cx, y: cy,
+    vx: (dx / dist) * speed, vy: (dy / dist) * speed,
+    w, h, dmg: en.dmg,
+    anim: new Anim('bola'),
+  });
+}
+
+function fireSpread(en, count, spreadAngle, speed) {
+  const cx = en.x + en.w / 2, cy = en.y + en.h / 2;
+  const dx = (player.x + player.w / 2) - cx;
+  const dy = (player.y + player.h / 2) - cy;
+  const baseAngle = Math.atan2(dy, dx);
+  const half = (count - 1) / 2;
+  for (let i = 0; i < count; i++) {
+    const ang = baseAngle + (i - half) * spreadAngle;
+    enemyBullets.push({
+      x: cx, y: cy,
+      vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
+      w: 16, h: 16, dmg: en.dmg,
+      anim: new Anim('bola'),
+    });
+  }
+}
+
 function updateEnemies(dt) {
+  const spawnQueue = [];
+
   for (const en of enemies) {
     if (!en.alive) continue;
     en.anim.update(dt);
     if (en.hitFlash > 0) en.hitFlash -= dt;
+    if (en.contactCooldown > 0) en.contactCooldown -= dt;
+    if (en.telegraph > 0) en.telegraph -= dt;
 
+    // ---------- movimento por tipo ----------
     if (en.type === 'ducky') {
       en.x += en.vx * dt;
       if (en.x < en.patrolMin || en.x > en.patrolMax) { en.vx *= -1; en.facing *= -1; }
@@ -1433,57 +1639,218 @@ function updateEnemies(dt) {
       en.wobble += dt * 1.6;
       en.y = en.baseY + Math.sin(en.wobble) * 30;
       en.facing = (player.x < en.x) ? -1 : 1;
-    } else if (en.type === 'boss') {
-      en.wobble += dt * 1.1;
-      en.y = en.baseY + Math.sin(en.wobble) * 36;
-      en.x += Math.cos(en.wobble * 0.6) * 26 * dt;
-      en.x = Math.max(en.patrolMin, Math.min(en.patrolMax, en.x));
+    } else if (en.type === 'sniper') {
+      en.x += en.vx * dt;
+      en.wobble += dt * 2;
+      en.y = en.baseY + Math.sin(en.wobble) * 8;
+      if (en.x < en.patrolMin || en.x > en.patrolMax) { en.vx *= -1; en.facing *= -1; }
       en.facing = (player.x < en.x) ? -1 : 1;
+    } else if (en.type === 'tankuda') {
+      const distToPlayer = player.x - en.x;
+      if (Math.abs(distToPlayer) < 220 && Math.abs(distToPlayer) > 10) {
+        en.vx = Math.sign(distToPlayer) * 130;
+        en.facing = Math.sign(distToPlayer);
+      } else {
+        if (en.x < en.patrolMin || en.x > en.patrolMax) { en.vx = (en.vx > 0 ? -1 : 1) * 38; en.facing *= -1; }
+        if (Math.abs(en.vx) > 40) en.vx = Math.sign(en.vx) * 38;
+      }
+      en.x += en.vx * dt;
+    } else if (en.type === 'bomber') {
+      en.x += en.vx * dt;
+      en.wobble += dt * 1.4;
+      en.y = en.baseY + Math.sin(en.wobble) * 20;
+      if (en.x < en.patrolMin || en.x > en.patrolMax) { en.vx *= -1; en.facing *= -1; }
+    } else if (en.type === 'swarmling') {
+      const dir = player.x > en.x ? 1 : -1;
+      en.vx = dir * Math.abs(en.vx);
+      en.facing = dir;
+      en.x += en.vx * dt;
+    } else if (en.type === 'boss') {
+      updateBossMovement(en, dt);
     }
 
+    // ---------- dano de contato (tankuda, swarmling, chefe corrompido) ----------
+    if (en.contactDamage && en.contactCooldown <= 0 && overlap(en, player)) {
+      damagePlayer(en.contactDamage);
+      en.contactCooldown = 0.7;
+      addShake(4, 0.12);
+    }
+
+    // ---------- tiro ----------
     en.shootTimer -= dt;
-    if (en.shootTimer <= 0) {
-      en.shootTimer = en.shootDelay;
+    if (en.shootTimer <= 0 && en.type !== 'swarmling') {
+      en.shootTimer = (en.archetype === 'final_overlord' && en.hp < en.maxHp * 0.5) ? en.shootDelay * 0.55 : en.shootDelay;
+
       if (en.type === 'drony') {
-        if (Math.abs(player.x - en.x) < 240) {
-          enemyBullets.push({
-            x: en.x + en.w / 2 - 8, y: en.y + en.h,
-            vx: 0, vy: 300, w: 16, h: 16,
-            dmg: en.dmg,
-            anim: new Anim('bola'),
-          });
+        if (Math.abs(player.x - en.x) < 320) {
+          fireAimedBullet(en, 280, 16, 16);
           sfx.enemyShoot();
         }
-      } else if (en.type === 'boss') {
-        // tiro em leque de 3 direcionado ao jogador
-        const cx = en.x + en.w / 2, cy = en.y + en.h / 2;
-        const dx = (player.x + player.w / 2) - cx;
-        const dy = (player.y + player.h / 2) - cy;
-        const baseAngle = Math.atan2(dy, dx);
-        [-0.3, 0, 0.3].forEach(off => {
-          const ang = baseAngle + off;
-          enemyBullets.push({
-            x: cx, y: cy,
-            vx: Math.cos(ang) * 260, vy: Math.sin(ang) * 260,
-            w: 16, h: 16,
-            dmg: en.dmg,
-            anim: new Anim('bola'),
-          });
+      } else if (en.type === 'sniper') {
+        en.telegraph = 0.45;
+        setTimeoutSafe(() => { if (en.alive) fireAimedBullet(en, 480, 14, 14); }, 0.45);
+        sfx.enemyShoot();
+      } else if (en.type === 'tankuda') {
+        const dir = en.facing;
+        enemyBullets.push({ x: en.x + (dir === 1 ? en.w : -6), y: en.y + en.h * 0.35, vx: 260 * dir, vy: 0, w: 20, h: 14, dmg: en.dmg, anim: new Anim('bola') });
+        sfx.enemyShoot();
+      } else if (en.type === 'bomber') {
+        enemyBullets.push({
+          x: en.x + en.w / 2, y: en.y + en.h,
+          vx: (player.x - en.x) * 0.15, vy: 40, w: 16, h: 16,
+          dmg: en.dmg, arc: true, anim: new Anim('bola'),
         });
         sfx.enemyShoot();
+      } else if (en.type === 'boss') {
+        fireBossAttack(en);
       } else {
         const dir = en.facing;
-        enemyBullets.push({
-          x: en.x + (dir === 1 ? en.w : -6), y: en.y + en.h * 0.4,
-          vx: 300 * dir, vy: 0, w: 18, h: 12,
-          dmg: en.dmg,
-          anim: new Anim('bola'),
-        });
+        enemyBullets.push({ x: en.x + (dir === 1 ? en.w : -6), y: en.y + en.h * 0.4, vx: 300 * dir, vy: 0, w: 18, h: 12, dmg: en.dmg, anim: new Anim('bola') });
         sfx.enemyShoot();
       }
     }
+
+    // invocador: chama reforços periodicamente
+    if (en.type === 'boss' && en.archetype === 'summoner') {
+      en.summonCooldown -= dt;
+      if (en.summonCooldown <= 0 && enemies.filter(e => e.alive && e.type === 'swarmling').length < 4) {
+        en.summonCooldown = 4.5;
+        spawnQueue.push(makeSwarmling(en.x - 40, currentLevelDef.id));
+        spawnQueue.push(makeSwarmling(en.x + 40, currentLevelDef.id));
+      }
+    }
+  }
+
+  if (spawnQueue.length) enemies.push(...spawnQueue);
+}
+
+// pequenos timers "seguros" que checam se o alvo ainda existe antes de disparar
+const _pendingTimeouts = [];
+function setTimeoutSafe(fn, seconds) {
+  _pendingTimeouts.push({ fn, t: seconds });
+}
+function updatePendingTimeouts(dt) {
+  for (let i = _pendingTimeouts.length - 1; i >= 0; i--) {
+    _pendingTimeouts[i].t -= dt;
+    if (_pendingTimeouts[i].t <= 0) {
+      _pendingTimeouts[i].fn();
+      _pendingTimeouts.splice(i, 1);
+    }
   }
 }
+
+function updateBossMovement(en, dt) {
+  en.wobble += dt * 1.1;
+
+  if (en.archetype === 'hover_spread') {
+    en.y = en.baseY + Math.sin(en.wobble) * 36;
+    en.x += Math.cos(en.wobble * 0.6) * 26 * dt;
+    en.x = Math.max(en.patrolMin, Math.min(en.patrolMax, en.x));
+    en.facing = (player.x < en.x) ? -1 : 1;
+
+  } else if (en.archetype === 'dash_queen') {
+    en.dashCooldown -= dt;
+    if (en.dashT > 0) {
+      en.dashT -= dt;
+      en.x += en.dashDir * 340 * dt;
+    } else {
+      en.y = en.baseY + Math.sin(en.wobble * 1.3) * 40;
+      en.x += Math.sin(en.wobble * 0.7) * 60 * dt;
+      if (en.dashCooldown <= 0) {
+        en.dashT = 0.4;
+        en.dashCooldown = 2.6;
+        en.dashDir = player.x > en.x ? 1 : -1;
+      }
+    }
+    en.x = Math.max(en.patrolMin, Math.min(en.patrolMax + 220, en.x));
+    en.facing = (player.x < en.x) ? -1 : 1;
+
+  } else if (en.archetype === 'ground_charger') {
+    en.dashCooldown -= dt;
+    const distToPlayer = player.x - en.x;
+    if (en.dashCooldown <= 0 && Math.abs(distToPlayer) < 340) {
+      en.dashT = 0.9;
+      en.dashCooldown = 3.2;
+      en.dashDir = Math.sign(distToPlayer) || 1;
+    }
+    if (en.dashT > 0) {
+      en.dashT -= dt;
+      en.x += en.dashDir * 300 * dt;
+      en.facing = en.dashDir;
+    } else {
+      en.x += en.vx * dt;
+      if (en.x < en.patrolMin || en.x > en.patrolMax) { en.vx *= -1; en.facing *= -1; }
+    }
+    en.y = GROUND_Y - en.h;
+
+  } else if (en.archetype === 'summoner') {
+    en.y = en.baseY + Math.sin(en.wobble * 0.8) * 18;
+    en.facing = (player.x < en.x) ? -1 : 1;
+
+  } else if (en.archetype === 'corrupted_twin') {
+    en.x += en.vx * dt;
+    if (en.x < en.patrolMin || en.x > en.patrolMax) { en.vx *= -1; en.facing *= -1; }
+    en.y = GROUND_Y - en.h + Math.sin(en.wobble * 4) * 3;
+
+  } else if (en.archetype === 'final_overlord') {
+    const enraged = en.hp < en.maxHp * 0.5;
+    en.dashCooldown -= dt;
+    if (en.dashT > 0) {
+      en.dashT -= dt;
+      en.x += en.dashDir * (enraged ? 420 : 300) * dt;
+    } else {
+      en.y = en.baseY + Math.sin(en.wobble * 1.1) * 46;
+      en.x += Math.cos(en.wobble * 0.5) * 40 * dt;
+      if (en.dashCooldown <= 0) {
+        en.dashT = 0.5;
+        en.dashCooldown = enraged ? 1.6 : 2.4;
+        en.dashDir = player.x > en.x ? 1 : -1;
+      }
+    }
+    en.x = Math.max(en.patrolMin - 100, Math.min(en.patrolMax + 300, en.x));
+    en.facing = (player.x < en.x) ? -1 : 1;
+  }
+}
+
+function fireBossAttack(en) {
+  const cx = en.x + en.w / 2, cy = en.y + en.h / 2;
+
+  if (en.archetype === 'hover_spread') {
+    fireSpread(en, 3, 0.3, 260);
+  } else if (en.archetype === 'dash_queen') {
+    fireSpread(en, 2, 0.22, 300);
+  } else if (en.archetype === 'ground_charger') {
+    const dir = en.facing;
+    for (let i = 0; i < 3; i++) {
+      enemyBullets.push({ x: cx, y: cy - 10 + i * 10, vx: 280 * dir, vy: 0, w: 20, h: 12, dmg: en.dmg, anim: new Anim('bola') });
+    }
+  } else if (en.archetype === 'summoner') {
+    fireAimedBullet(en, 220, 16, 16);
+  } else if (en.archetype === 'corrupted_twin') {
+    en.phase = (en.phase + 1) % 2;
+    if (en.phase === 0) fireAimedBullet(en, 560, 10, 10);
+    else fireSpread(en, 3, 0.35, 280);
+
+  } else if (en.archetype === 'final_overlord') {
+    const enraged = en.hp < en.maxHp * 0.5;
+    en.phase = (en.phase + 1) % 3;
+    if (en.phase === 0) {
+      fireSpread(en, enraged ? 6 : 4, 0.24, 300);
+    } else if (en.phase === 1) {
+      fireAimedBullet(en, 520, 12, 12);
+      if (enraged) setTimeoutSafe(() => { if (en.alive) fireAimedBullet(en, 520, 12, 12); }, 0.15);
+    } else {
+      const dirs = enraged ? 10 : 7;
+      for (let i = 0; i < dirs; i++) {
+        const ang = (Math.PI * 2 * i) / dirs;
+        enemyBullets.push({ x: cx, y: cy, vx: Math.cos(ang) * 210, vy: Math.sin(ang) * 210, w: 14, h: 14, dmg: en.dmg, anim: new Anim('bola') });
+      }
+    }
+  }
+  sfx.enemyShoot();
+}
+
+
 
 
 
@@ -1531,9 +1898,19 @@ function updateBullets(dt) {
   });
 
   enemyBullets = enemyBullets.filter(b => {
+    if (b.arc) b.vy += 480 * dt; // gravidade da bomba
     b.x += b.vx * dt; b.y += b.vy * dt;
     b.anim.update(dt);
     if (b.x < camera.x - 60 || b.x > camera.x + W + 60 || b.y > H + 60 || b.y < -60) return false;
+
+    if (b.arc && b.y >= GROUND_Y - 10) {
+      spawnExplosion(b.x, GROUND_Y, 0.9);
+      sfx.explosion();
+      const blastRadius = 46;
+      const dist = Math.hypot((player.x + player.w / 2) - b.x, (player.y + player.h / 2) - GROUND_Y);
+      if (dist < blastRadius) damagePlayer(b.dmg);
+      return false;
+    }
 
     if (overlap(b, player)) {
       damagePlayer(b.dmg || 10);
@@ -1621,7 +1998,66 @@ function drawTileDecor(tileIndex, x, topY, w, h, rebuild) {
   }
 }
 
+function drawWorldAtmosphere(worldDef, rebuildPct, t) {
+  const atm = worldDef.atmosphere;
+  const fadeOld = Math.max(0, 1 - rebuildPct * 1.3);
+
+  if (atm === 'embers') {
+    for (let i = 0; i < 12; i++) {
+      const px = (i * 83 + 40) % W;
+      const py = H - ((t * 22 + i * 47) % (H - 40));
+      const flick = 0.5 + Math.sin(t * 3 + i) * 0.5;
+      ctx.fillStyle = `rgba(255,140,60,${0.28 * flick * fadeOld})`;
+      ctx.beginPath();
+      ctx.arc(px, py, 1.6 + flick, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (atm === 'smoke') {
+    for (let i = 0; i < 6; i++) {
+      const px = (i * 161 + t * 10) % (W + 80) - 40;
+      const py = 40 + (i * 67) % 200;
+      ctx.fillStyle = `rgba(120,110,95,${0.14 * fadeOld})`;
+      ctx.beginPath();
+      ctx.ellipse(px, py, 30, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (atm === 'bubbles') {
+    for (let i = 0; i < 10; i++) {
+      const px = (i * 97 + 30) % W;
+      const py = H - ((t * 30 + i * 53) % (H - 20));
+      ctx.strokeStyle = `rgba(120,230,190,${0.22 * fadeOld})`;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(px, py, 3 + (i % 3), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  } else if (atm === 'fog') {
+    for (let i = 0; i < 4; i++) {
+      const px = ((t * 14 + i * 260) % (W + 300)) - 150;
+      const py = 100 + i * 70;
+      ctx.fillStyle = `rgba(170,178,210,${0.10 * fadeOld})`;
+      ctx.beginPath();
+      ctx.ellipse(px, py, 160, 26, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // partículas de vida quando reconstruído, em qualquer mundo
+  if (rebuildPct > 0.15) {
+    for (let i = 0; i < 8; i++) {
+      const px = (i * 113 + t * 16) % W;
+      const py = 50 + (i * 61) % 260;
+      const tw = 0.5 + Math.sin(t * 2 + i) * 0.5;
+      ctx.fillStyle = `rgba(140,255,150,${0.18 * tw * rebuildPct})`;
+      ctx.beginPath();
+      ctx.arc(px, py, 1.5 + tw * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
 function drawBackground(levelDef, camX, rebuild) {
+  const worldDef = WORLDS[levelDef.world];
   const skyTop = lerpColor(levelDef.skyCorrupt[0], levelDef.skyClear[0], rebuild);
   const skyBot = lerpColor(levelDef.skyCorrupt[1], levelDef.skyClear[1], rebuild);
   const grad = ctx.createLinearGradient(0, 0, 0, H);
@@ -1636,6 +2072,14 @@ function drawBackground(levelDef, camX, rebuild) {
     ctx.globalAlpha = 0.5 + rebuild * 0.15;
     for (let x = Math.floor(parX / bw) * bw; x < parX + W + bw; x += bw) {
       ctx.drawImage(STATIC.predio_branco, x, topY, bw, 260);
+      if (worldDef.fog && rebuild < 0.95) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'color';
+        ctx.globalAlpha = (1 - rebuild) * 0.3;
+        ctx.fillStyle = worldDef.fog;
+        ctx.fillRect(x, topY, bw, 260);
+        ctx.restore();
+      }
       if (rebuild > 0.05) {
         ctx.save();
         ctx.globalCompositeOperation = 'color';
@@ -1656,6 +2100,14 @@ function drawBackground(levelDef, camX, rebuild) {
     ctx.globalAlpha = 0.82;
     for (let x = Math.floor(parX / bw) * bw; x < parX + W + bw; x += bw) {
       ctx.drawImage(STATIC.predio_cinza, x, topY, bw, 210);
+      if (worldDef.fog && rebuild < 0.95) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'color';
+        ctx.globalAlpha = (1 - rebuild) * 0.35;
+        ctx.fillStyle = worldDef.fog;
+        ctx.fillRect(x, topY, bw, 210);
+        ctx.restore();
+      }
       if (rebuild > 0.05) {
         ctx.save();
         ctx.globalCompositeOperation = 'color';
@@ -1670,10 +2122,13 @@ function drawBackground(levelDef, camX, rebuild) {
       drawTileDecor(Math.round(x / bw) + 500, x, topY, bw, 210, rebuild);
     }
   }
+
+  drawWorldAtmosphere(worldDef, rebuild, performance.now() / 1000);
 }
 
 function drawGround(levelDef, camX, rebuild) {
-  ctx.fillStyle = lerpColor('#33313d', '#3a4a2c', rebuild);
+  const worldDef = WORLDS[levelDef.world];
+  ctx.fillStyle = lerpColor(worldDef.groundCorrupt, worldDef.groundClear, rebuild);
   ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
   ctx.fillStyle = lerpColor('#e8c400', '#7be04a', rebuild);
   ctx.fillRect(0, GROUND_Y + 3, W, 5);
@@ -1699,6 +2154,13 @@ function drawPlayer() {
   const alpha = (p.invuln > 0 && Math.floor(p.invuln * 16) % 2 === 0) ? 0.4 : 1;
   const img = p.anim.currentImage();
   const skinHue = (SKIN_DEFS[save.skin] && SKIN_DEFS[save.skin].hue) || 0;
+
+  if (p.dashT > 0) {
+    for (let i = 1; i <= 3; i++) {
+      drawSprite(img, sx - p.facing * i * 14, sy, SPRITE_DEFS[p.def.key].displayH, p.facing, 0.12 * (4 - i), skinHue);
+    }
+  }
+
   drawSprite(img, sx, sy, SPRITE_DEFS[p.def.key].displayH, p.facing, alpha, skinHue);
 }
 
@@ -1707,11 +2169,23 @@ function drawEnemies() {
     if (!en.alive) continue;
     const sx = en.x - camera.x + en.w / 2;
     const sy = en.y + en.h / 2;
-    const alpha = (en.hitFlash > 0 && Math.floor(en.hitFlash * 40) % 2 === 0) ? 0.35 : 1;
+    const flashing = en.hitFlash > 0 && Math.floor(en.hitFlash * 40) % 2 === 0;
+    const telegraphing = en.telegraph > 0 && Math.floor(en.telegraph * 20) % 2 === 0;
+    const alpha = flashing ? 0.35 : 1;
     const img = en.anim.currentImage();
-    const displayH = en.boss ? 96 : SPRITE_DEFS[en.spriteKey].displayH;
-    const hue = en.boss ? 320 : 0;
+    const displayH = en.boss ? Math.round(70 + (en.tierScale || 1) * 8) : SPRITE_DEFS[en.spriteKey].displayH;
+    const hue = telegraphing ? 0 : (en.hueTint || 0);
     drawSprite(img, sx, sy, displayH, en.facing, alpha, hue);
+
+    if (telegraphing) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,60,60,0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(sx, sy, displayH * 0.45, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     const bw = en.w;
     const bx = en.x - camera.x;
@@ -1725,7 +2199,7 @@ function drawEnemies() {
       ctx.fillStyle = '#ff9fe0';
       ctx.font = 'bold 10px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('CHEFE', bx + bw / 2, by - 4);
+      ctx.fillText(en.archetypeLabel || 'CHEFE', bx + bw / 2, by - 4);
     }
   }
 }
@@ -1877,13 +2351,13 @@ function drawClearBanner() {
   if (t > 0.6) {
     const finishedId = currentLevelDef.id;
     const isLast = finishedId >= TOTAL_LEVELS;
-    const isBossClear = currentLevelDef.isBoss;
+    const isGuardianClear = currentLevelDef.isGuardian;
     button(W / 2 - 100, H / 2 + 24, 200, 30,
       isLast ? 'VOLTAR AO MAPA' : 'PRÓXIMA FASE >',
       () => {
         if (isLast) {
           startCutscene(FINAL_CUTSCENE, () => goToHub());
-        } else if (isBossClear) {
+        } else if (isGuardianClear) {
           const w = worldIndexForLevel(finishedId);
           startCutscene(worldEndCutscene(w), () => startLevel(getLevelDef(finishedId + 1)));
         } else {
@@ -1937,7 +2411,7 @@ function drawMenu(dt) {
   ctx.textAlign = 'center';
   ctx.fillStyle = '#999';
   ctx.font = '11px monospace';
-  ctx.fillText('um jogo de Caetano · VCtv', W / 2, 214);
+  ctx.fillText('um jogo de Caetano', W / 2, 214);
 
   button(W / 2 - 110, 240, 220, 42, 'JOGAR', () => {
     state = STATE.CHAR_SELECT;
@@ -2005,11 +2479,12 @@ function drawInstructions(dt) {
     '',
     'CONTROLES',
     '←/→ ou A/D: andar        Espaço/W/↑: pular',
-    'J ou Z: atirar             Esc: pausar',
+    'J ou Z: atirar        Shift: dash (invencível por um instante)',
+    'Esc: pausar',
     '',
-    'Derrote todos os inimigos de uma fase pra limpá-la.',
-    'Use o dinheiro pra comprar upgrades na loja,',
-    'e o XP sobe seu nível automaticamente entre fases.',
+    'A cada 10 fases tem um chefe. A cada 100, um guardião',
+    'de mundo bem mais forte, que libera a próxima área.',
+    'Cuidado com inimigos de contato (tocam e causam dano).',
     '',
     'Escudo (azul) absorve dano antes da vida (vermelho).',
   ];
@@ -2100,7 +2575,7 @@ function drawCharSelect(dt) {
 
 let hubPulse = 0;
 
-let hubWorld = 0;
+let hubPage = 0; // 0 a TOTAL_PAGES-1, cada página mostra 10 fases
 let hubClouds = null;
 
 function initHubClouds() {
@@ -2115,8 +2590,10 @@ function drawHub(dt) {
   clickables = [];
   if (!hubClouds) initHubClouds();
 
+  const hubWorld = Math.floor(hubPage / 10);
+  const pageInWorld = hubPage % 10;
   const worldDef = WORLDS[hubWorld];
-  const worldStart = hubWorld * LEVELS_PER_WORLD + 1;
+  const worldStart = hubPage * MINI_BOSS_INTERVAL + 1;
   const worldClearedCount = save.clearedLevels.filter(id => worldIndexForLevel(id) === hubWorld).length;
   const worldRebuildPct = worldClearedCount / LEVELS_PER_WORLD;
   const worldUnlocked = hubWorld === 0 || save.clearedLevels.includes(hubWorld * LEVELS_PER_WORLD);
@@ -2138,18 +2615,7 @@ function drawHub(dt) {
     ctx.ellipse(cx + 22 * c.s, c.y + 4, 22 * c.s, 10 * c.s, 0, 0, Math.PI * 2);
     ctx.fill();
   }
-  // partículas: fumaça se corrompido, brilho verde se reconstruído
-  for (let i = 0; i < 10; i++) {
-    const px = (i * 97 + hubPulse * 14) % W;
-    const py = 60 + (i * 53) % 300;
-    const tw = Math.sin(hubPulse * 2 + i) * 0.5 + 0.5;
-    ctx.fillStyle = worldRebuildPct > 0.4
-      ? `rgba(140,255,140,${0.15 * tw})`
-      : `rgba(120,120,140,${0.12 * tw})`;
-    ctx.beginPath();
-    ctx.arc(px, py, 2 + tw * 2, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  drawWorldAtmosphere(worldDef, worldRebuildPct, hubPulse);
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffd400';
@@ -2157,15 +2623,15 @@ function drawHub(dt) {
   ctx.fillText(`MUNDO ${hubWorld + 1} · ${worldDef.name}`, W / 2, 30);
   ctx.fillStyle = '#aaa';
   ctx.font = '10px monospace';
-  ctx.fillText(`${worldClearedCount}/${LEVELS_PER_WORLD} nesta área  ·  ${totalCleared}/${TOTAL_LEVELS} no total`, W / 2, 46);
+  ctx.fillText(`página ${pageInWorld + 1}/10  ·  ${worldClearedCount}/${LEVELS_PER_WORLD} nesta área  ·  ${totalCleared}/${TOTAL_LEVELS} no total`, W / 2, 46);
 
-  // setas de navegação entre mundos
-  const canPrev = hubWorld > 0;
-  const canNext = hubWorld < WORLDS.length - 1;
-  button(16, 16, 34, 30, '<', () => { hubWorld = Math.max(0, hubWorld - 1); }, { fontSize: 16, disabled: !canPrev, hot: canPrev });
-  button(W - 50, 16, 34, 30, '>', () => { hubWorld = Math.min(WORLDS.length - 1, hubWorld + 1); }, { fontSize: 16, disabled: !canNext, hot: canNext });
+  // setas de navegação entre páginas (10 fases por vez)
+  const canPrev = hubPage > 0;
+  const canNext = hubPage < TOTAL_PAGES - 1;
+  button(16, 16, 34, 30, '<', () => { hubPage = Math.max(0, hubPage - 1); }, { fontSize: 16, disabled: !canPrev, hot: canPrev });
+  button(W - 50, 16, 34, 30, '>', () => { hubPage = Math.min(TOTAL_PAGES - 1, hubPage + 1); }, { fontSize: 16, disabled: !canNext, hot: canNext });
 
-  // pontinhos indicando qual mundo está sendo visto
+  // pontinhos indicando qual mundo está sendo visto (clique pula pra 1a pagina daquele mundo)
   WORLDS.forEach((w, i) => {
     const dx = W / 2 - (WORLDS.length - 1) * 8 + i * 16;
     const wCleared = save.clearedLevels.filter(id => worldIndexForLevel(id) === i).length;
@@ -2173,7 +2639,7 @@ function drawHub(dt) {
     ctx.beginPath();
     ctx.arc(dx, 58, 4, 0, Math.PI * 2);
     ctx.fill();
-    registerClickable(dx - 8, 50, 16, 16, () => { hubWorld = i; });
+    registerClickable(dx - 8, 50, 16, 16, () => { hubPage = i * 10; });
   });
 
   if (!worldUnlocked) {
@@ -2200,25 +2666,30 @@ function drawHub(dt) {
     ctx.strokeStyle = 'rgba(255,255,255,0.18)';
     ctx.lineWidth = 4;
     ctx.beginPath();
-    for (let i = 0; i < LEVELS_PER_WORLD; i++) {
+    for (let i = 0; i < MINI_BOSS_INTERVAL; i++) {
       const p = nodePos(i);
       if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
     }
     ctx.stroke();
 
-    for (let i = 0; i < LEVELS_PER_WORLD; i++) {
+    for (let i = 0; i < MINI_BOSS_INTERVAL; i++) {
       const id = worldStart + i;
       const lvl = getLevelDef(id);
       const pos = nodePos(i);
       const unlocked = id <= save.unlockedLevel;
       const clearedLvl = save.clearedLevels.includes(id);
       const isBoss = lvl.isBoss;
-      const nodeR = isBoss ? r + 8 : r;
+      const isGuardian = lvl.isGuardian;
+      const nodeR = isGuardian ? r + 10 : (isBoss ? r + 6 : r);
 
       let fillColor = 'rgba(255,255,255,0.06)';
       let strokeColor = 'rgba(255,255,255,0.25)';
       if (clearedLvl) { fillColor = 'rgba(123,224,74,0.22)'; strokeColor = '#7be04a'; }
-      else if (unlocked) { fillColor = isBoss ? 'rgba(255,60,140,0.18)' : 'rgba(255,212,0,0.15)'; strokeColor = isBoss ? '#ff3c8c' : '#ffd400'; }
+      else if (unlocked) {
+        if (isGuardian) { fillColor = 'rgba(255,60,60,0.2)'; strokeColor = '#ff3c3c'; }
+        else if (isBoss) { fillColor = 'rgba(255,60,140,0.18)'; strokeColor = '#ff3c8c'; }
+        else { fillColor = 'rgba(255,212,0,0.15)'; strokeColor = '#ffd400'; }
+      }
 
       const pulse = unlocked && !clearedLvl ? Math.sin(hubPulse * 4 + i) * 3 : 0;
 
@@ -2234,7 +2705,8 @@ function drawHub(dt) {
 
       ctx.fillStyle = unlocked ? '#fff' : '#555';
       ctx.font = `bold ${isBoss ? 18 : 16}px monospace`;
-      ctx.fillText(clearedLvl ? '✓' : (unlocked ? (isBoss ? '👑' : String(id)) : '🔒'), pos.x, pos.y + 6);
+      const icon = clearedLvl ? '✓' : (unlocked ? (isGuardian ? '💀' : (isBoss ? '👑' : String(id))) : '🔒');
+      ctx.fillText(icon, pos.x, pos.y + 6);
 
       if (unlocked) {
         ctx.fillStyle = '#ddd';
@@ -2552,6 +3024,7 @@ function frame(now) {
     clickables = [];
     updatePlayer(dt);
     updateEnemies(dt);
+    updatePendingTimeouts(dt);
     updateBullets(dt);
     updatePickups(dt);
     updateWorld(dt);
