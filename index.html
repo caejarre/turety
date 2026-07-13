@@ -144,12 +144,83 @@
     padding: 0 10px;
   }
   body.is-touch #footerInfo { display: none; }
+
+  /* ---------- tela de autenticação (Supabase) ---------- */
+  #authOverlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #05050a;
+    z-index: 100;
+  }
+  #authOverlay.hidden { display: none; }
+  #authBox {
+    width: 86%; max-width: 320px;
+    background: #0d0d16;
+    border: 1px solid #23232f;
+    border-radius: 10px;
+    padding: 22px 20px;
+    box-shadow: 0 0 30px rgba(80,140,255,0.15);
+  }
+  #authBox h1 {
+    color: #ffd400; font-size: 18px; letter-spacing: 4px;
+    text-align: center; margin-bottom: 4px; font-family: 'Courier New', monospace;
+  }
+  #authBox p.sub {
+    color: #777; font-size: 11px; text-align: center; margin-bottom: 16px;
+  }
+  #authBox input {
+    width: 100%; padding: 9px 10px; margin-bottom: 10px;
+    background: #16161f; border: 1px solid #2c2c3a; border-radius: 6px;
+    color: #eee; font-family: 'Courier New', monospace; font-size: 13px;
+    user-select: text; -webkit-user-select: text;
+  }
+  #authBox input:focus { outline: none; border-color: #5a8cff; }
+  #authBox button {
+    width: 100%; padding: 10px; margin-top: 4px;
+    background: linear-gradient(145deg, #ffd400, #e0b400);
+    border: none; border-radius: 6px; color: #1a1a10;
+    font-family: 'Courier New', monospace; font-weight: bold; font-size: 13px;
+    cursor: pointer;
+  }
+  #authBox button:disabled { opacity: 0.5; cursor: default; }
+  #authBox .switchMode {
+    display: block; width: 100%; text-align: center;
+    margin-top: 12px; background: none; color: #7aa2ff;
+    font-size: 11px; text-decoration: underline; padding: 4px;
+  }
+  #authMsg {
+    min-height: 16px; font-size: 11px; text-align: center;
+    margin-top: 8px; color: #e2223a;
+  }
+  #authMsg.ok { color: #4ade80; }
+  #logoutBtn {
+    position: absolute; top: 3%; left: 3%;
+    z-index: 40;
+    background: rgba(20,20,30,0.7); border: 1px solid rgba(255,255,255,0.2);
+    color: #ccc; font-family: 'Courier New', monospace; font-size: 10px;
+    padding: 6px 10px; border-radius: 6px; cursor: pointer; display: none;
+  }
+  body.logged-in #logoutBtn { display: block; }
 </style>
 </head>
 <body>
 
 <div id="gameWrap">
   <canvas id="game" width="960" height="480"></canvas>
+
+  <button id="logoutBtn">SAIR DA CONTA</button>
+
+  <div id="authOverlay">
+    <div id="authBox">
+      <h1>TURETY</h1>
+      <p class="sub" id="authSubtitle">entre para salvar seu progresso na nuvem</p>
+      <input type="email" id="authEmail" placeholder="email" autocomplete="email">
+      <input type="password" id="authPassword" placeholder="senha (mín. 6 caracteres)" autocomplete="current-password">
+      <button id="authSubmitBtn">ENTRAR</button>
+      <button class="switchMode" id="authSwitchBtn">não tem conta? cadastre-se</button>
+      <div id="authMsg"></div>
+    </div>
+  </div>
 
   <div id="touchControls">
     <div id="tcLeft" class="tcBtn">◀</div>
@@ -170,6 +241,127 @@
 <div id="footerInfo">
   <b>&larr;/&rarr; ou A/D</b> andar &nbsp; <b>Espaço/W/&uarr;</b> pular &nbsp; <b>J/Z</b> atirar &nbsp; <b>Shift</b> dash &nbsp; <b>Esc</b> pausar &nbsp; · feito por Caetano
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+// ============================================================
+// CONFIGURAÇÃO DO SUPABASE — TROQUE PELOS SEUS VALORES
+// (Project Settings → API no painel do Supabase)
+// ============================================================
+const SUPABASE_URL = 'https://mslyfpagpwuklqtguahh.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zbHlmcGFncHd1a2xxdGd1YWhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NDk2NDQsImV4cCI6MjA5OTUyNTY0NH0.Dc38ohQsfx-3AKZzOIiNKEBXA49cOyG2Vblpvk_QTcM';
+
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ============================================================
+// SISTEMA DE AUTENTICAÇÃO
+// ============================================================
+(() => {
+  "use strict";
+
+  const authOverlay = document.getElementById('authOverlay');
+  const authEmail = document.getElementById('authEmail');
+  const authPassword = document.getElementById('authPassword');
+  const authSubmitBtn = document.getElementById('authSubmitBtn');
+  const authSwitchBtn = document.getElementById('authSwitchBtn');
+  const authMsg = document.getElementById('authMsg');
+  const authSubtitle = document.getElementById('authSubtitle');
+  const logoutBtn = document.getElementById('logoutBtn');
+
+  let mode = 'login'; // 'login' | 'signup'
+
+  function setMsg(text, ok) {
+    authMsg.textContent = text || '';
+    authMsg.className = ok ? 'ok' : '';
+  }
+
+  function setMode(newMode) {
+    mode = newMode;
+    setMsg('');
+    if (mode === 'login') {
+      authSubtitle.textContent = 'entre para salvar seu progresso na nuvem';
+      authSubmitBtn.textContent = 'ENTRAR';
+      authSwitchBtn.textContent = 'não tem conta? cadastre-se';
+    } else {
+      authSubtitle.textContent = 'crie sua conta para começar a jogar';
+      authSubmitBtn.textContent = 'CADASTRAR';
+      authSwitchBtn.textContent = 'já tem conta? entrar';
+    }
+  }
+
+  authSwitchBtn.addEventListener('click', () => setMode(mode === 'login' ? 'signup' : 'login'));
+
+  async function handleSubmit() {
+    const email = authEmail.value.trim();
+    const password = authPassword.value;
+
+    if (!email || !password) {
+      setMsg('preencha email e senha');
+      return;
+    }
+    if (password.length < 6) {
+      setMsg('a senha precisa ter no mínimo 6 caracteres');
+      return;
+    }
+
+    authSubmitBtn.disabled = true;
+    setMsg('aguarde...');
+
+    try {
+      if (mode === 'login') {
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabaseClient.auth.signUp({ email, password });
+        if (error) throw error;
+        if (data.user && !data.session) {
+          setMsg('cadastro criado! verifique seu email para confirmar antes de entrar.', true);
+        }
+      }
+    } catch (err) {
+      setMsg(traduzErro(err.message));
+    } finally {
+      authSubmitBtn.disabled = false;
+    }
+  }
+
+  function traduzErro(msg) {
+    if (!msg) return 'ocorreu um erro, tente novamente';
+    if (/invalid login credentials/i.test(msg)) return 'email ou senha incorretos';
+    if (/already registered|already exists/i.test(msg)) return 'este email já está cadastrado';
+    if (/rate limit/i.test(msg)) return 'muitas tentativas, aguarde um instante';
+    return msg;
+  }
+
+  authSubmitBtn.addEventListener('click', handleSubmit);
+  authPassword.addEventListener('keydown', e => { if (e.key === 'Enter') handleSubmit(); });
+
+  logoutBtn.addEventListener('click', async () => {
+    await supabaseClient.auth.signOut();
+  });
+
+  window.TuretyAuth = {
+    onReady: null,
+    showLogin() {
+      authOverlay.classList.remove('hidden');
+      document.body.classList.remove('logged-in');
+    },
+    hideLogin() {
+      authOverlay.classList.add('hidden');
+      document.body.classList.add('logged-in');
+    },
+  };
+
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (session) {
+      window.TuretyAuth.hideLogin();
+    } else {
+      window.TuretyAuth.showLogin();
+    }
+    if (window.TuretyAuth.onReady) window.TuretyAuth.onReady(session);
+  });
+})();
+</script>
 
 <script>
 (() => {
@@ -768,19 +960,23 @@ function defaultSave() {
 }
 
 let save = defaultSave();
+let currentUserId = null;
+let saveLoadedFromCloud = false;
+let cloudSaveTimer = null;
+
+function mergeSaveObject(parsed) {
+  return {
+    ...defaultSave(), ...parsed,
+    upgrades: { ...defaultSave().upgrades, ...(parsed.upgrades || {}) },
+    stats: { ...defaultSave().stats, ...(parsed.stats || {}) },
+    achievements: parsed.achievements || [],
+  };
+}
 
 function loadSave() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      save = {
-        ...defaultSave(), ...parsed,
-        upgrades: { ...defaultSave().upgrades, ...(parsed.upgrades || {}) },
-        stats: { ...defaultSave().stats, ...(parsed.stats || {}) },
-        achievements: parsed.achievements || [],
-      };
-    }
+    if (raw) save = mergeSaveObject(JSON.parse(raw));
   } catch (e) {
     save = defaultSave();
   }
@@ -790,6 +986,7 @@ function loadSave() {
 function writeSave() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }
   catch (e) { /* localStorage indisponível, segue sem persistir */ }
+  scheduleCloudSave();
 }
 
 function resetSave() {
@@ -797,8 +994,65 @@ function resetSave() {
   writeSave();
 }
 
+async function loadSaveFromCloud(userId) {
+  try {
+    const { data, error } = await supabaseClient
+      .from('game_saves')
+      .select('save_data')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) throw error;
+
+    if (data && data.save_data) {
+      save = mergeSaveObject(data.save_data);
+    } else {
+      await supabaseClient.from('game_saves').insert({ user_id: userId, save_data: save });
+    }
+  } catch (e) {
+    console.warn('Não foi possível carregar o save da nuvem, usando save local.', e);
+  }
+  sfx.muted = !!save.muted;
+  saveLoadedFromCloud = true;
+}
+
+function scheduleCloudSave() {
+  if (!currentUserId || !saveLoadedFromCloud) return;
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(() => pushSaveToCloud(), 600);
+}
+
+async function pushSaveToCloud() {
+  if (!currentUserId) return;
+  try {
+    const { error } = await supabaseClient
+      .from('game_saves')
+      .upsert({ user_id: currentUserId, save_data: save }, { onConflict: 'user_id' });
+    if (error) throw error;
+  } catch (e) {
+    console.warn('Falha ao salvar na nuvem (o save local continua ok).', e);
+  }
+}
+
 loadSave();
 refreshControlModeUI();
+
+window.TuretyAuth.onReady = async (session) => {
+  if (session && session.user) {
+    currentUserId = session.user.id;
+    saveLoadedFromCloud = false;
+    await loadSaveFromCloud(currentUserId);
+    refreshControlModeUI();
+  } else {
+    currentUserId = null;
+    saveLoadedFromCloud = false;
+    loadSave();
+  }
+  // 'state' é declarada mais abaixo no arquivo; só reseta pro menu
+  // se a máquina de estados já existir (evita erro no primeiro load).
+  if (typeof state !== 'undefined' && typeof STATE !== 'undefined') {
+    state = STATE.MENU;
+  }
+};
 
 // ============================================================
 // CONQUISTAS
