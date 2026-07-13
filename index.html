@@ -56,25 +56,68 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255,255,255,0.08);
-    border: 2px solid rgba(255,255,255,0.25);
+    background: linear-gradient(145deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04));
+    border: 2px solid rgba(255,255,255,0.3);
     border-radius: 50%;
+    box-shadow:
+      0 4px 12px rgba(0,0,0,0.45),
+      inset 0 1px 1px rgba(255,255,255,0.25),
+      inset 0 -3px 6px rgba(0,0,0,0.25);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
     color: #fff;
     font-size: 22px;
+    text-shadow: 0 2px 3px rgba(0,0,0,0.6);
     pointer-events: auto;
     touch-action: none;
     user-select: none;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
   }
-  .tcBtn:active { background: rgba(255,255,255,0.25); }
+  .tcBtn:active {
+    transform: scale(0.9);
+    box-shadow:
+      0 2px 6px rgba(0,0,0,0.5),
+      inset 0 2px 5px rgba(0,0,0,0.4);
+  }
+  .tcBtn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    box-shadow: 0 0 16px 2px var(--glow, transparent);
+    pointer-events: none;
+    opacity: 0.7;
+  }
+  #tcLeft, #tcRight {
+    --glow: rgba(140, 170, 255, 0.35);
+    background: linear-gradient(145deg, rgba(140,170,255,0.22), rgba(80,100,180,0.08));
+    font-size: 26px;
+  }
   #tcLeft   { left: 4%;  bottom: 12%; width: 15%; aspect-ratio: 1; }
   #tcRight  { left: 21%; bottom: 12%; width: 15%; aspect-ratio: 1; }
-  #tcJump   { right: 22%; bottom: 26%; width: 15%; aspect-ratio: 1; background: rgba(120,200,255,0.12); }
-  #tcDash   { right: 40%; bottom: 12%; width: 13%; aspect-ratio: 1; background: rgba(200,120,255,0.16); font-size: 12px; }
-  #tcShoot  { right: 4%;  bottom: 12%; width: 17%; aspect-ratio: 1; background: rgba(255,180,0,0.18); }
+  #tcJump   {
+    right: 22%; bottom: 26%; width: 15%; aspect-ratio: 1;
+    --glow: rgba(120,200,255,0.45);
+    background: linear-gradient(145deg, rgba(120,200,255,0.3), rgba(60,120,200,0.1));
+    font-size: 24px;
+  }
+  #tcDash   {
+    right: 40%; bottom: 12%; width: 13%; aspect-ratio: 1;
+    --glow: rgba(210,140,255,0.5);
+    background: linear-gradient(145deg, rgba(210,140,255,0.32), rgba(140,70,200,0.1));
+    font-size: 22px;
+  }
+  #tcShoot  {
+    right: 4%;  bottom: 12%; width: 17%; aspect-ratio: 1;
+    --glow: rgba(255,180,60,0.55);
+    background: linear-gradient(145deg, rgba(255,190,80,0.38), rgba(220,120,20,0.12));
+    font-size: 26px;
+  }
   #tcPause  {
     top: 3%; right: 3%; width: 9%; aspect-ratio: 1;
-    font-size: 14px; border-radius: 8px;
-    background: rgba(10,10,18,0.55);
+    font-size: 13px; border-radius: 10px;
+    background: linear-gradient(145deg, rgba(20,20,30,0.7), rgba(10,10,16,0.55));
+    border: 2px solid rgba(255,255,255,0.2);
   }
 
   #loadingOverlay {
@@ -112,9 +155,9 @@
     <div id="tcLeft" class="tcBtn">◀</div>
     <div id="tcRight" class="tcBtn">▶</div>
     <div id="tcJump" class="tcBtn">▲</div>
-    <div id="tcDash" class="tcBtn">DASH</div>
+    <div id="tcDash" class="tcBtn">⚡</div>
     <div id="tcShoot" class="tcBtn">●</div>
-    <div id="tcPause" class="tcBtn">II</div>
+    <div id="tcPause" class="tcBtn">❚❚</div>
   </div>
 
   <div id="loadingOverlay">
@@ -323,14 +366,16 @@ class Anim {
   reset() { this.t = 0; this.done = false; }
 }
 
-function drawSprite(img, cx, cy, targetH, facing = 1, alpha = 1, hueRotate = 0) {
+function drawSprite(img, cx, cy, targetH, facing = 1, alpha = 1, filterOrHue = 0) {
   if (!img || !img.naturalWidth) return;
   const ratio = img.naturalWidth / img.naturalHeight;
   const h = targetH;
   const w = h * ratio;
   ctx.save();
   ctx.globalAlpha = alpha;
-  if (hueRotate) ctx.filter = `hue-rotate(${hueRotate}deg) saturate(1.5)`;
+  if (filterOrHue) {
+    ctx.filter = typeof filterOrHue === 'string' ? filterOrHue : `hue-rotate(${filterOrHue}deg) saturate(1.5)`;
+  }
   ctx.translate(cx, cy);
   ctx.scale(facing, 1);
   ctx.drawImage(img, -w / 2, -h / 2, w, h);
@@ -368,10 +413,10 @@ class SFX {
     osc.start(t0);
     osc.stop(t0 + dur + 0.02);
   }
-  noise(dur, vol = 0.22, cutoff = 1200) {
+  noise(dur, vol = 0.22, cutoff = 1200, delay = 0) {
     this.ensure();
     if (!this.ctx || this.muted) return;
-    const t0 = this.ctx.currentTime;
+    const t0 = this.ctx.currentTime + delay;
     const size = Math.floor(this.ctx.sampleRate * dur);
     const buffer = this.ctx.createBuffer(1, size, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -384,6 +429,58 @@ class SFX {
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(cutoff, t0);
+    src.connect(filter).connect(gain).connect(this.ctx.destination);
+    src.start(t0);
+  }
+  kick(delay = 0, vol = 0.3) {
+    this.ensure();
+    if (!this.ctx || this.muted) return;
+    const t0 = this.ctx.currentTime + delay;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(150, t0);
+    osc.frequency.exponentialRampToValueAtTime(38, t0 + 0.11);
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.15);
+    osc.connect(gain).connect(this.ctx.destination);
+    osc.start(t0); osc.stop(t0 + 0.16);
+  }
+  snare(delay = 0, vol = 0.16) {
+    this.ensure();
+    if (!this.ctx || this.muted) return;
+    const t0 = this.ctx.currentTime + delay;
+    const size = Math.floor(this.ctx.sampleRate * 0.11);
+    const buffer = this.ctx.createBuffer(1, size, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < size; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / size);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.11);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(1500, t0);
+    src.connect(filter).connect(gain).connect(this.ctx.destination);
+    src.start(t0);
+  }
+  hihat(delay = 0, vol = 0.07) {
+    this.ensure();
+    if (!this.ctx || this.muted) return;
+    const t0 = this.ctx.currentTime + delay;
+    const size = Math.floor(this.ctx.sampleRate * 0.035);
+    const buffer = this.ctx.createBuffer(1, size, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < size; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / size);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.035);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(6500, t0);
     src.connect(filter).connect(gain).connect(this.ctx.destination);
     src.start(t0);
   }
@@ -432,65 +529,161 @@ function seq(notes, stepDur) {
   return { events: out, totalDuration: t };
 }
 
+function beatFromSteps(totalSteps, hits) {
+  const arr = new Array(totalSteps).fill('0');
+  hits.forEach(i => { if (i >= 0 && i < totalSteps) arr[i] = '1'; });
+  return arr.join('');
+}
+function everyN(total, n, offset = 0) {
+  const out = [];
+  for (let i = offset; i < total; i += n) out.push(i);
+  return out;
+}
+
 const MUSIC_TRACKS = {
   menu: (() => {
-    const step = 0.24;
+    // tema calmo do menu/mapa: melodia em duas partes (A repete, B sobe e resolve)
+    const step = 0.22;
     const lead = seq([
+      // parte A
       [N.A3, 2], [N.C4, 2], [N.E4, 2], [N.C4, 2],
       [N.G3, 2], [N.C4, 2], [N.D4, 2], [null, 2],
       [N.A3, 2], [N.C4, 2], [N.E4, 2], [N.D4, 2],
       [N.F3, 2], [N.G3, 2], [N.A3, 2], [null, 2],
+      // parte B: sobe mais e volta pousando
+      [N.C4, 2], [N.D4, 2], [N.F4, 2], [N.E4, 2],
+      [N.D4, 2], [N.C4, 2], [N.A3, 2], [null, 2],
+      [N.E4, 2], [N.D4, 2], [N.C4, 2], [N.A3, 2],
+      [N.G3, 2], [N.F3, 2], [N.G3, 4],
     ], step);
     const bass = seq([
       [N.A3 / 2, 4], [N.G3 / 2, 4], [N.A3 / 2, 4], [N.F3 / 2, 4],
+      [N.C3, 4], [N.A3 / 2, 4], [N.D3, 4], [N.G3 / 2, 4],
+      [N.A3 / 2, 4], [N.G3 / 2, 4], [N.A3 / 2, 4], [N.F3 / 2, 4],
+      [N.C3, 4], [N.D3, 4], [N.A3 / 2, 4], [N.G3 / 2, 4],
     ], step);
-    return { lead, bass, leadType: 'square', bassType: 'triangle', leadVol: 0.045, bassVol: 0.06 };
+    const totalSteps = 64;
+    return {
+      lead, bass, leadType: 'square', bassType: 'triangle', leadVol: 0.045, bassVol: 0.06,
+      stepDur: step,
+      drums: {
+        kick: beatFromSteps(totalSteps, everyN(totalSteps, 8)),
+        snare: beatFromSteps(totalSteps, [28]),
+        hihat: beatFromSteps(totalSteps, everyN(totalSteps, 4, 2)),
+      },
+      drumVol: { kick: 0.18, snare: 0.1, hihat: 0.035 },
+    };
   })(),
+
   level: (() => {
-    const step = 0.16;
+    // tema de ação: mais rápido, backbeat solido, melodia com pergunta e resposta
+    const step = 0.155;
     const lead = seq([
+      // parte A
       [N.C4, 2], [N.E4, 2], [N.G4, 2], [N.E4, 2],
       [N.C4, 2], [N.E4, 2], [N.G4, 2], [N.A4, 2],
       [N.F4, 2], [N.A4, 2], [N.C5, 2], [N.A4, 2],
       [N.F4, 2], [N.G4, 2], [N.E4, 2], [N.D4, 2],
+      // parte B: variação mais aguda, resposta
+      [N.G4, 1], [N.G4, 1], [N.A4, 2], [N.G4, 2],
+      [N.E4, 2], [N.G4, 2], [N.F4, 2], [N.D4, 2],
+      [N.E4, 2], [N.C5, 2], [N.B4, 2], [N.G4, 2],
+      [N.A4, 2], [N.G4, 2], [N.E4, 2], [N.C4, 4],
     ], step);
     const bass = seq([
       [N.C3, 2], [N.C3, 2], [N.G3 / 2, 2], [N.G3 / 2, 2],
       [N.F3 / 2, 2], [N.F3 / 2, 2], [N.G3 / 2, 2], [N.G3 / 2, 2],
+      [N.A3 / 2, 2], [N.A3 / 2, 2], [N.F3 / 2, 2], [N.F3 / 2, 2],
+      [N.G3 / 2, 2], [N.G3 / 2, 2], [N.C3, 2], [N.C3, 2],
+      [N.C3, 2], [N.C3, 2], [N.G3 / 2, 2], [N.G3 / 2, 2],
+      [N.A3 / 2, 2], [N.A3 / 2, 2], [N.F3 / 2, 2], [N.F3 / 2, 2],
+      [N.G3 / 2, 2], [N.G3 / 2, 2], [N.E3 / 2, 2], [N.E3 / 2, 2],
+      [N.F3 / 2, 2], [N.G3 / 2, 2], [N.C3, 4],
     ], step);
-    return { lead, bass, leadType: 'square', bassType: 'square', leadVol: 0.05, bassVol: 0.045 };
+    const totalSteps = 64;
+    return {
+      lead, bass, leadType: 'square', bassType: 'square', leadVol: 0.05, bassVol: 0.045,
+      stepDur: step,
+      drums: {
+        kick: beatFromSteps(totalSteps, [...everyN(totalSteps, 8), 6, 22]),
+        snare: beatFromSteps(totalSteps, everyN(totalSteps, 8, 4)),
+        hihat: beatFromSteps(totalSteps, everyN(totalSteps, 2)),
+      },
+      drumVol: { kick: 0.22, snare: 0.14, hihat: 0.045 },
+    };
   })(),
+
   boss: (() => {
-    const step = 0.13;
+    // tema de chefe: intenso, rápido, cromático e tenso
+    const step = 0.125;
     const lead = seq([
+      // parte A
       [N.E4, 2], [N.F4, 1], [N.E4, 1], [N.D4, 2], [N.E4, 2],
       [N.C4, 2], [N.D4, 1], [N.C4, 1], [N.B3, 2], [N.C4, 2],
       [N.E4, 2], [N.F4, 1], [N.E4, 1], [N.D4, 2], [N.E4, 2],
       [N.G4, 2], [N.F4, 2], [N.E4, 2], [N.D4, 2],
+      // parte B: sobe pra um clímax mais agudo e tenso
+      [N.G4, 1], [N.A4, 1], [N.G4, 1], [N.F4, 1], [N.E4, 2], [N.D4, 2],
+      [N.C5, 2], [N.B4, 1], [N.A4, 1], [N.G4, 2], [N.F4, 2],
+      [N.E4, 1], [N.D4, 1], [N.C4, 1], [N.B3, 1], [N.C4, 4],
     ], step);
     const bass = seq([
       [N.A3 / 2, 2], [N.A3 / 2, 2], [N.F3 / 2, 2], [N.F3 / 2, 2],
       [N.G3 / 2, 2], [N.G3 / 2, 2], [N.E3 / 2, 2], [N.E3 / 2, 2],
+      [N.A3 / 2, 2], [N.A3 / 2, 2], [N.G3 / 2, 2], [N.G3 / 2, 2],
+      [N.F3 / 2, 2], [N.F3 / 2, 2], [N.E3 / 2, 4],
+      [N.G3 / 2, 2], [N.G3 / 2, 2], [N.F3 / 2, 2], [N.F3 / 2, 2],
+      [N.E3 / 2, 2], [N.E3 / 2, 2], [N.D3 / 2, 2], [N.D3 / 2, 2],
+      [N.A3 / 2, 4], [N.E3 / 2, 4],
     ], step);
-    return { lead, bass, leadType: 'sawtooth', bassType: 'square', leadVol: 0.05, bassVol: 0.05 };
+    const totalSteps = 56;
+    return {
+      lead, bass, leadType: 'sawtooth', bassType: 'square', leadVol: 0.05, bassVol: 0.05,
+      stepDur: step,
+      drums: {
+        kick: beatFromSteps(totalSteps, everyN(totalSteps, 4)),
+        snare: beatFromSteps(totalSteps, everyN(totalSteps, 8, 4)),
+        hihat: beatFromSteps(totalSteps, everyN(totalSteps, 2)),
+      },
+      drumVol: { kick: 0.24, snare: 0.16, hihat: 0.04 },
+    };
   })(),
+
   shop: (() => {
     // trilha original e animada, inspirada no clima alegre e sincopado
     // de pop-rock com metais, sem copiar nenhuma melodia existente
     const step = 0.15;
     const lead = seq([
+      // parte A
       [N.G4, 1], [N.G4, 1], [N.E4, 2], [N.D4, 1], [N.E4, 1], [N.G4, 2],
       [N.A4, 1], [N.A4, 1], [N.G4, 2], [N.E4, 1], [N.D4, 1], [N.C4, 2],
       [N.G4, 1], [N.G4, 1], [N.E4, 2], [N.D4, 1], [N.E4, 1], [N.G4, 2],
       [N.C5, 2], [N.B4, 2], [N.A4, 2], [N.G4, 2],
+      // parte B: refrão mais animado e agudo
+      [N.C5, 1], [N.C5, 1], [N.B4, 2], [N.A4, 1], [N.G4, 1], [N.A4, 2],
+      [N.G4, 1], [N.E4, 1], [N.D4, 2], [N.E4, 2], [N.G4, 2],
+      [N.A4, 2], [N.G4, 2], [N.E4, 2], [N.C4, 4],
     ], step);
     const bass = seq([
       [N.C3, 2], [N.C3, 2], [N.G3 / 2, 2], [N.G3 / 2, 2],
       [N.A3 / 2, 2], [N.A3 / 2, 2], [N.F3 / 2, 2], [N.G3 / 2, 2],
       [N.C3, 2], [N.C3, 2], [N.G3 / 2, 2], [N.G3 / 2, 2],
       [N.F3 / 2, 2], [N.F3 / 2, 2], [N.G3 / 2, 2], [N.G3 / 2, 2],
+      [N.A3 / 2, 2], [N.A3 / 2, 2], [N.F3 / 2, 2], [N.F3 / 2, 2],
+      [N.C3, 2], [N.C3, 2], [N.G3 / 2, 2], [N.G3 / 2, 2],
+      [N.A3 / 2, 2], [N.A3 / 2, 2], [N.F3 / 2, 2], [N.G3 / 2, 4],
     ], step);
-    return { lead, bass, leadType: 'square', bassType: 'triangle', leadVol: 0.05, bassVol: 0.055 };
+    const totalSteps = 58;
+    return {
+      lead, bass, leadType: 'square', bassType: 'triangle', leadVol: 0.05, bassVol: 0.055,
+      stepDur: step,
+      drums: {
+        kick: beatFromSteps(totalSteps, [0, 6, 10, 16, 22, 28, 32, 38]),
+        snare: beatFromSteps(totalSteps, everyN(totalSteps, 8, 4)),
+        hihat: beatFromSteps(totalSteps, everyN(totalSteps, 2)),
+      },
+      drumVol: { kick: 0.2, snare: 0.13, hihat: 0.04 },
+    };
   })(),
 };
 
@@ -524,6 +717,13 @@ class MusicPlayer {
     if (!sfx.ctx || sfx.muted) return;
     track.lead.events.forEach(ev => sfx.tone(ev.freq, ev.dur, track.leadType, track.leadVol, null, ev.t));
     if (track.bass) track.bass.events.forEach(ev => sfx.tone(ev.freq, ev.dur, track.bassType, track.bassVol, null, ev.t));
+    if (track.drums) {
+      const sd = track.stepDur;
+      const dv = track.drumVol || { kick: 0.2, snare: 0.13, hihat: 0.04 };
+      track.drums.kick.split('').forEach((c, i) => { if (c === '1') sfx.kick(i * sd, dv.kick); });
+      track.drums.snare.split('').forEach((c, i) => { if (c === '1') sfx.snare(i * sd, dv.snare); });
+      track.drums.hihat.split('').forEach((c, i) => { if (c === '1') sfx.hihat(i * sd, dv.hihat); });
+    }
   }
 }
 
@@ -671,14 +871,24 @@ const UPGRADE_DEFS = {
 };
 
 const SKIN_DEFS = {
-  default:  { label: 'Original',          cost: 0,      hue: 0 },
-  azul:     { label: 'Azul Ártico',       cost: 25000,  hue: 200 },
-  roxo:     { label: 'Roxo Nebulosa',     cost: 50000,  hue: 270 },
-  vermelho: { label: 'Vermelho Magma',    cost: 90000,  hue: 340 },
-  verde:    { label: 'Verde Radioativo', cost: 140000, hue: 100 },
-  dourado:  { label: 'Dourado Lendário',  cost: 190000, hue: 45 },
-  arcoiris: { label: 'Arco-íris Cósmico', cost: 250000, hue: 0, animated: true },
+  default:  { label: 'Original',          cost: 0,      filter: '' },
+  azul:     { label: 'Azul Ártico',       cost: 25000,  filter: 'hue-rotate(195deg) saturate(2.2) brightness(1.05)' },
+  roxo:     { label: 'Roxo Nebulosa',     cost: 50000,  filter: 'hue-rotate(265deg) saturate(2.2) brightness(1.05)' },
+  vermelho: { label: 'Vermelho Magma',    cost: 90000,  filter: 'hue-rotate(345deg) saturate(2.4) brightness(1.05)' },
+  verde:    { label: 'Verde Radioativo', cost: 140000, filter: 'hue-rotate(95deg) saturate(3) brightness(1.2)' },
+  dourado:  { label: 'Dourado Lendário',  cost: 190000, filter: 'hue-rotate(35deg) saturate(2.8) sepia(0.35) brightness(1.2) contrast(1.1)' },
+  arcoiris: { label: 'Arco-íris Cósmico', cost: 250000, filter: '', animated: true },
 };
+
+function getSkinFilter(skinKey) {
+  const skin = SKIN_DEFS[skinKey];
+  if (!skin) return '';
+  if (skin.animated) {
+    const hue = Math.round((performance.now() / 12) % 360);
+    return `hue-rotate(${hue}deg) saturate(2.5) brightness(1.1)`;
+  }
+  return skin.filter || '';
+}
 
 function upgradeCost(key, currentLevel) {
   return UPGRADE_COST_TIERS[currentLevel] || UPGRADE_COST_TIERS[UPGRADE_COST_TIERS.length - 1];
@@ -733,6 +943,18 @@ const WORLDS = [
   { name: 'NÚCLEO FINAL',      skyCorrupt: ['#280f10', '#3a0f14'], skyClear: ['#8c2a54', '#e8a0c0'],
     groundCorrupt: '#2a1012', groundClear: '#4a1c2c', fog: '#c02040', atmosphere: 'embers' },
 ];
+
+// os 2 inimigos exclusivos de cada mundo (cor e ataque próprios)
+const WORLD_EXTRA_TYPES = [
+  ['sentinela', 'saqueador'],           // mundo 0: Ruínas
+  ['perfurador', 'torreta_giratoria'],  // mundo 1: Setor Industrial
+  ['sapo_venenoso', 'nuvem_toxica'],    // mundo 2: Pântano Tóxico
+  ['fantasma', 'sombra'],               // mundo 3: Cidade Fantasma
+  ['incendiario', 'vortice'],           // mundo 4: Núcleo Final
+];
+
+// tipos que andam no chão (o resto voa/paira e precisa de y ao nascer)
+const GROUND_TYPES = new Set(['ducky', 'tankuda', 'sentinela', 'saqueador', 'perfurador', 'sapo_venenoso', 'sombra', 'incendiario']);
 
 const TOTAL_LEVELS = WORLDS.length * LEVELS_PER_WORLD;
 const TOTAL_PAGES = TOTAL_LEVELS / MINI_BOSS_INTERVAL; // páginas de 10 fases pro hub
@@ -851,7 +1073,7 @@ const HAND_LEVELS = {
     name: 'RUÍNA INICIAL',
     length: 1900,
     solids: [
-      { x: 720, y: GROUND_Y - 100, w: 150, h: 20 },
+      { x: 720, y: GROUND_Y - 80, w: 150, h: 20 },
     ],
     spawns: [
       { type: 'ducky', x: 620 },
@@ -865,8 +1087,8 @@ const HAND_LEVELS = {
     name: 'SETOR CORROÍDO',
     length: 2200,
     solids: [
-      { x: 620,  y: GROUND_Y - 100, w: 150, h: 20 },
-      { x: 1400, y: GROUND_Y - 150, w: 160, h: 20 },
+      { x: 620,  y: GROUND_Y - 80, w: 150, h: 20 },
+      { x: 1400, y: GROUND_Y - 80, w: 160, h: 20 },
     ],
     spawns: [
       { type: 'ducky', x: 520 },
@@ -881,9 +1103,9 @@ const HAND_LEVELS = {
     name: 'CÉU TÓXICO',
     length: 2450,
     solids: [
-      { x: 500,  y: GROUND_Y - 110, w: 150, h: 20 },
-      { x: 1050, y: GROUND_Y - 160, w: 160, h: 20 },
-      { x: 1750, y: GROUND_Y - 110, w: 160, h: 20 },
+      { x: 500,  y: GROUND_Y - 80, w: 150, h: 20 },
+      { x: 1050, y: GROUND_Y - 80, w: 160, h: 20 },
+      { x: 1750, y: GROUND_Y - 80, w: 160, h: 20 },
     ],
     spawns: [
       { type: 'plany', x: 560,  y: 258 },
@@ -899,9 +1121,9 @@ const HAND_LEVELS = {
     name: 'OFICINA ABANDONADA',
     length: 2400,
     solids: [
-      { x: 560,  y: GROUND_Y - 100, w: 150, h: 20 },
-      { x: 1150, y: GROUND_Y - 150, w: 160, h: 20 },
-      { x: 1800, y: GROUND_Y - 100, w: 160, h: 20 },
+      { x: 560,  y: GROUND_Y - 80, w: 150, h: 20 },
+      { x: 1150, y: GROUND_Y - 80, w: 160, h: 20 },
+      { x: 1800, y: GROUND_Y - 80, w: 160, h: 20 },
     ],
     spawns: [
       { type: 'ducky', x: 500 },
@@ -958,7 +1180,7 @@ function getLevelDef(id) {
     const solids = [];
     for (let i = 0; i < numSolids; i++) {
       const sx = 380 + (length - 760) * ((i + 1) / (numSolids + 1)) + (rand() - 0.5) * 140;
-      const sy = GROUND_Y - (80 + Math.floor(rand() * 90));
+      const sy = GROUND_Y - (45 + Math.floor(rand() * 35));
       solids.push({ x: Math.round(sx), y: sy, w: 150 + Math.floor(rand() * 40), h: 20 });
     }
 
@@ -975,6 +1197,11 @@ function getLevelDef(id) {
     if (id > 120) pool.push('tankuda', 'bomber');
     if (id > 200) pool.push('swarmling', 'swarmling');
 
+    // cada mundo introduz seus 2 inimigos exclusivos depois das primeiras fases dele
+    const worldLocalId = id - world * LEVELS_PER_WORLD;
+    if (worldLocalId > 3) pool.push(...WORLD_EXTRA_TYPES[world], ...WORLD_EXTRA_TYPES[world]);
+    for (let w = 0; w < world; w++) pool.push(WORLD_EXTRA_TYPES[w][0]);
+
     for (let i = 0; i < enemyCount; i++) {
       const t = pool[Math.floor(rand() * pool.length)];
       const ex = Math.round(300 + (length - 650) * ((i + 1) / (enemyCount + 1)));
@@ -983,7 +1210,7 @@ function getLevelDef(id) {
         for (let k = 0; k < 3; k++) {
           spawns.push({ type: 'swarmling', x: ex + k * 26 });
         }
-      } else if (t === 'ducky' || t === 'tankuda') {
+      } else if (GROUND_TYPES.has(t)) {
         spawns.push({ type: t, x: ex });
       } else {
         spawns.push({ type: t, x: ex, y: 190 + Math.floor(rand() * 90) });
@@ -1222,6 +1449,201 @@ function makeBoss(x, y, archetypeKey, tierScale = 1) {
   };
 }
 
+// ============================================================
+// INIMIGOS EXCLUSIVOS DE CADA MUNDO (2 por mundo, cor e ataque próprios)
+// ============================================================
+
+// --- MUNDO 0: RUÍNAS ---
+
+// sentinela: torreta parada no chão, não anda, mira certeira e rápida
+function makeSentinela(x, id = 1) {
+  const f = difficultyFactor(id);
+  return {
+    type: 'sentinela', spriteKey: 'ducky',
+    x, y: GROUND_Y - 46, w: 40, h: 50,
+    vx: 0, facing: -1,
+    hp: Math.round(26 * f), maxHp: Math.round(26 * f),
+    shootTimer: 1.0, shootDelay: Math.max(0.6, 1.5 - id * 0.006),
+    dmg: Math.round(10 * f),
+    xpReward: 14, moneyReward: 8,
+    anim: new Anim('ducky', Math.random() * 2),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    hueTint: 210,
+  };
+}
+
+// saqueador: anda errático rápido e avança em investida quando perto
+function makeSaqueador(x, id = 1) {
+  const f = difficultyFactor(id);
+  return {
+    type: 'saqueador', spriteKey: 'ducky',
+    x, y: GROUND_Y - 46, w: 38, h: 48,
+    vx: -90, facing: -1,
+    hp: Math.round(24 * f), maxHp: Math.round(24 * f),
+    patrolMin: x - 170, patrolMax: x + 170,
+    contactDamage: Math.round(10 * f), contactCooldown: 0,
+    dashT: 0, dashCooldown: 1.6 + Math.random(),
+    xpReward: 14, moneyReward: 8,
+    anim: new Anim('ducky', Math.random() * 2),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    hueTint: 25,
+  };
+}
+
+// --- MUNDO 1: SETOR INDUSTRIAL ---
+
+// perfurador: tanque que da investidas de perfuração no chão
+function makePerfurador(x, id = 1) {
+  const f = difficultyFactor(id);
+  return {
+    type: 'perfurador', spriteKey: 'ducky',
+    x, y: GROUND_Y - 52, w: 48, h: 54,
+    vx: -34, facing: -1,
+    hp: Math.round(48 * f), maxHp: Math.round(48 * f),
+    patrolMin: x - 140, patrolMax: x + 140,
+    contactDamage: Math.round(13 * f), contactCooldown: 0,
+    dashT: 0, dashCooldown: 2.2,
+    xpReward: 20, moneyReward: 13,
+    anim: new Anim('ducky', Math.random() * 2),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    hueTint: 55,
+  };
+}
+
+// torreta giratória: paira parada e atira um leque em rotação constante
+function makeTorretaGiratoria(x, y, id = 1) {
+  const f = difficultyFactor(id);
+  return {
+    type: 'torreta_giratoria', spriteKey: 'Drony',
+    x, y, baseY: y, w: 56, h: 32,
+    vx: 0, facing: 1,
+    hp: Math.round(38 * f), maxHp: Math.round(38 * f),
+    shootTimer: 0.8, shootDelay: Math.max(0.35, 0.9 - id * 0.003),
+    dmg: Math.round(8 * f),
+    spinAngle: 0,
+    xpReward: 20, moneyReward: 13,
+    anim: new Anim('Drony', Math.random() * 2),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    hueTint: 35,
+  };
+}
+
+// --- MUNDO 2: PÂNTANO TÓXICO ---
+
+// sapo venenoso: pula em arco e deixa poça toxica onde cai
+function makeSapoVenenoso(x, id = 1) {
+  const f = difficultyFactor(id);
+  return {
+    type: 'sapo_venenoso', spriteKey: 'ducky',
+    x, y: GROUND_Y - 40, w: 36, h: 42,
+    vx: 0, vy: 0, facing: -1,
+    hp: Math.round(26 * f), maxHp: Math.round(26 * f),
+    patrolMin: x - 200, patrolMax: x + 200,
+    hopT: Math.random() * 1.5,
+    contactDamage: Math.round(9 * f), contactCooldown: 0,
+    xpReward: 16, moneyReward: 10,
+    anim: new Anim('ducky', Math.random() * 2),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    hueTint: 110,
+  };
+}
+
+// nuvem tóxica: flutua devagar soltando pulsos de gás venenoso ao redor
+function makeNuvemToxica(x, y, id = 1) {
+  const f = difficultyFactor(id);
+  return {
+    type: 'nuvem_toxica', spriteKey: 'Plany',
+    x, y, baseY: y, w: 50, h: 44,
+    vx: -35, facing: -1,
+    hp: Math.round(30 * f), maxHp: Math.round(30 * f),
+    patrolMin: x - 160, patrolMax: x + 160,
+    shootTimer: 1.6, shootDelay: 2.2,
+    dmg: Math.round(7 * f),
+    xpReward: 18, moneyReward: 11,
+    anim: new Anim('Plany', Math.random() * 2),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    wobble: Math.random() * 10,
+    hueTint: 130,
+  };
+}
+
+// --- MUNDO 3: CIDADE FANTASMA ---
+
+// fantasma: fica invisível/intangível por um tempo e reaparece pra atacar
+function makeFantasma(x, y, id = 1) {
+  const f = difficultyFactor(id);
+  return {
+    type: 'fantasma', spriteKey: 'Drony',
+    x, y, baseY: y, w: 50, h: 40,
+    vx: -55, facing: -1,
+    hp: Math.round(28 * f), maxHp: Math.round(28 * f),
+    patrolMin: x - 200, patrolMax: x + 200,
+    phaseT: 0, phaseCycle: 2.6, visible: true,
+    shootTimer: 1.2, shootDelay: 1.6,
+    dmg: Math.round(11 * f),
+    xpReward: 20, moneyReward: 13,
+    anim: new Anim('Drony', Math.random() * 2),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    wobble: Math.random() * 10,
+    hueTint: 190,
+  };
+}
+
+// sombra: teleporta em saltos curtos na direção do jogador
+function makeSombra(x, id = 1) {
+  const f = difficultyFactor(id);
+  return {
+    type: 'sombra', spriteKey: 'ducky',
+    x, y: GROUND_Y - 46, w: 38, h: 48,
+    vx: 0, facing: -1,
+    hp: Math.round(22 * f), maxHp: Math.round(22 * f),
+    teleportT: 1 + Math.random(),
+    contactDamage: Math.round(9 * f), contactCooldown: 0,
+    xpReward: 16, moneyReward: 10,
+    anim: new Anim('ducky', Math.random() * 2),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    hueTint: 275,
+  };
+}
+
+// --- MUNDO 4: NÚCLEO FINAL ---
+
+// incendiário: deixa rastro de fogo e explode ao morrer
+function makeIncendiario(x, id = 1) {
+  const f = difficultyFactor(id);
+  return {
+    type: 'incendiario', spriteKey: 'ducky',
+    x, y: GROUND_Y - 46, w: 40, h: 50,
+    vx: -70, facing: -1,
+    hp: Math.round(30 * f), maxHp: Math.round(30 * f),
+    patrolMin: x - 180, patrolMax: x + 180,
+    trailT: 0,
+    contactDamage: Math.round(11 * f), contactCooldown: 0,
+    xpReward: 20, moneyReward: 13,
+    anim: new Anim('ducky', Math.random() * 2),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    hueTint: 355,
+  };
+}
+
+// vórtice: flutua puxando levemente o jogador pra perto enquanto atira
+function makeVortice(x, y, id = 1) {
+  const f = difficultyFactor(id);
+  return {
+    type: 'vortice', spriteKey: 'Drony',
+    x, y, baseY: y, w: 54, h: 38,
+    vx: 0, facing: -1,
+    hp: Math.round(34 * f), maxHp: Math.round(34 * f),
+    shootTimer: 1.3, shootDelay: 1.7,
+    dmg: Math.round(10 * f),
+    xpReward: 22, moneyReward: 14,
+    anim: new Anim('Drony', Math.random() * 2),
+    alive: true, hitFlash: 0, deathTimer: 0,
+    wobble: Math.random() * 10,
+    hueTint: 305,
+  };
+}
+
 function spawnEnemyFromDef(d, levelDef) {
   const id = (levelDef && levelDef.id) || 1;
   switch (d.type) {
@@ -1232,6 +1654,16 @@ function spawnEnemyFromDef(d, levelDef) {
     case 'tankuda':   return makeTankuda(d.x, id);
     case 'bomber':    return makeBomber(d.x, d.y, id);
     case 'swarmling': return makeSwarmling(d.x, id);
+    case 'sentinela': return makeSentinela(d.x, id);
+    case 'saqueador': return makeSaqueador(d.x, id);
+    case 'perfurador': return makePerfurador(d.x, id);
+    case 'torreta_giratoria': return makeTorretaGiratoria(d.x, d.y, id);
+    case 'sapo_venenoso': return makeSapoVenenoso(d.x, id);
+    case 'nuvem_toxica': return makeNuvemToxica(d.x, d.y, id);
+    case 'fantasma':  return makeFantasma(d.x, d.y, id);
+    case 'sombra':    return makeSombra(d.x, id);
+    case 'incendiario': return makeIncendiario(d.x, id);
+    case 'vortice':   return makeVortice(d.x, d.y, id);
     case 'boss':      return makeBoss(d.x, d.y, (levelDef && levelDef.bossArchetype) || 'hover_spread', (levelDef && levelDef.bossTierScale) || 1);
   }
   return null;
@@ -1240,6 +1672,42 @@ function spawnEnemyFromDef(d, levelDef) {
 let enemies = [];
 function spawnLevelEnemies(levelDef) {
   enemies = levelDef.spawns.map(d => spawnEnemyFromDef(d, levelDef)).filter(Boolean);
+}
+
+// ============================================================
+// ZONAS DE PERIGO (poças tóxicas, rastros de fogo, gás)
+// ============================================================
+
+let hazardZones = [];
+
+function spawnHazard(x, y, radius, dmgPerSec, duration, color) {
+  hazardZones.push({ x, y, radius, dmgPerSec, duration, maxDuration: duration, color, tickTimer: 0 });
+}
+
+function updateHazards(dt) {
+  hazardZones = hazardZones.filter(hz => {
+    hz.duration -= dt;
+    if (hz.duration <= 0) return false;
+    hz.tickTimer -= dt;
+    const px = player.x + player.w / 2, py = player.y + player.h / 2;
+    const dist = Math.hypot(px - hz.x, py - hz.y);
+    if (dist < hz.radius && hz.tickTimer <= 0) {
+      hz.tickTimer = 0.4;
+      damagePlayer(hz.dmgPerSec * 0.4);
+    }
+    return true;
+  });
+}
+
+function drawHazards(camX) {
+  for (const hz of hazardZones) {
+    const alpha = Math.min(1, hz.duration / Math.min(1, hz.maxDuration)) * 0.35;
+    const pulse = 0.85 + Math.sin(performance.now() / 180) * 0.15;
+    ctx.fillStyle = hz.color.replace('ALPHA', (alpha * pulse).toFixed(2));
+    ctx.beginPath();
+    ctx.arc(hz.x - camX, hz.y, hz.radius * pulse, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 // ============================================================
@@ -1489,6 +1957,7 @@ function startLevel(levelDef) {
   enemyBullets = [];
   particles = [];
   popups = [];
+  hazardZones = [];
   camera.x = 0;
   camera.shakeMag = 0;
   worldRebuild = 0;
@@ -1759,6 +2228,97 @@ function updateEnemies(dt) {
       en.vx = dir * Math.abs(en.vx);
       en.facing = dir;
       en.x += en.vx * dt;
+    } else if (en.type === 'sentinela') {
+      en.facing = (player.x < en.x) ? -1 : 1;
+    } else if (en.type === 'saqueador') {
+      en.dashCooldown -= dt;
+      if (en.dashT > 0) {
+        en.dashT -= dt;
+        en.x += en.facing * 260 * dt;
+      } else {
+        en.x += en.vx * dt;
+        if (en.x < en.patrolMin || en.x > en.patrolMax) { en.vx *= -1; en.facing *= -1; }
+        if (en.dashCooldown <= 0 && Math.abs(player.x - en.x) < 160) {
+          en.dashT = 0.35;
+          en.dashCooldown = 1.8 + Math.random();
+          en.facing = player.x > en.x ? 1 : -1;
+        }
+      }
+    } else if (en.type === 'perfurador') {
+      en.dashCooldown -= dt;
+      if (en.dashT > 0) {
+        en.dashT -= dt;
+        en.x += en.facing * 220 * dt;
+      } else {
+        en.x += en.vx * dt;
+        if (en.x < en.patrolMin || en.x > en.patrolMax) { en.vx *= -1; en.facing *= -1; }
+        if (en.dashCooldown <= 0 && Math.abs(player.x - en.x) < 200) {
+          en.dashT = 0.6;
+          en.dashCooldown = 2.5;
+          en.facing = player.x > en.x ? 1 : -1;
+        }
+      }
+    } else if (en.type === 'torreta_giratoria') {
+      en.spinAngle += dt * 2.4;
+      en.y = en.baseY + Math.sin(performance.now() / 500) * 6;
+    } else if (en.type === 'sapo_venenoso') {
+      en.hopT -= dt;
+      if (en.hopT <= 0 && en.vy === 0) {
+        en.hopT = 1.3;
+        en.vy = -260;
+        en.vx = (player.x > en.x ? 1 : -1) * 90;
+        en.facing = Math.sign(en.vx) || -1;
+      }
+      en.vy += 900 * dt;
+      en.y += en.vy * dt;
+      en.x += en.vx * dt;
+      if (en.y >= GROUND_Y - en.h) {
+        en.y = GROUND_Y - en.h;
+        if (en.vy > 50) {
+          spawnHazard(en.x + en.w / 2, GROUND_Y, 36, en.contactDamage || 8, 3, 'rgba(90,220,90,ALPHA)');
+        }
+        en.vy = 0; en.vx = 0;
+      }
+      en.x = Math.max(en.patrolMin, Math.min(en.patrolMax, en.x));
+    } else if (en.type === 'nuvem_toxica') {
+      en.x += en.vx * dt;
+      en.wobble += dt * 1.2;
+      en.y = en.baseY + Math.sin(en.wobble) * 18;
+      if (en.x < en.patrolMin || en.x > en.patrolMax) { en.vx *= -1; en.facing *= -1; }
+    } else if (en.type === 'fantasma') {
+      en.phaseT += dt;
+      en.visible = (en.phaseT % en.phaseCycle) < en.phaseCycle * 0.6;
+      en.x += en.vx * dt;
+      en.wobble += dt * 1.5;
+      en.y = en.baseY + Math.sin(en.wobble) * 22;
+      if (en.x < en.patrolMin || en.x > en.patrolMax) { en.vx *= -1; en.facing *= -1; }
+    } else if (en.type === 'sombra') {
+      en.teleportT -= dt;
+      en.facing = (player.x < en.x) ? -1 : 1;
+      if (en.teleportT <= 0) {
+        en.teleportT = 1.3 + Math.random() * 0.6;
+        const dir = player.x > en.x ? 1 : -1;
+        en.x += dir * (110 + Math.random() * 60);
+        en.x = Math.max(60, Math.min(currentLevelDef.length - 60, en.x));
+        spawnExplosion(en.x + en.w / 2, en.y + en.h / 2, 0.4);
+      }
+    } else if (en.type === 'incendiario') {
+      en.x += en.vx * dt;
+      if (en.x < en.patrolMin || en.x > en.patrolMax) { en.vx *= -1; en.facing *= -1; }
+      en.trailT -= dt;
+      if (en.trailT <= 0) {
+        en.trailT = 0.5;
+        spawnHazard(en.x + en.w / 2, GROUND_Y, 26, (en.contactDamage || 8) * 0.6, 1.4, 'rgba(255,110,40,ALPHA)');
+      }
+    } else if (en.type === 'vortice') {
+      en.wobble += dt * 1.3;
+      en.y = en.baseY + Math.sin(en.wobble) * 24;
+      en.facing = (player.x < en.x) ? -1 : 1;
+      const dist = Math.hypot(player.x - en.x, player.y - en.y);
+      if (dist < 220 && dist > 10) {
+        const pull = 36 * dt;
+        player.x += (en.x - player.x) / dist * pull;
+      }
     } else if (en.type === 'boss') {
       updateBossMovement(en, dt);
     }
@@ -1772,7 +2332,8 @@ function updateEnemies(dt) {
 
     // ---------- tiro ----------
     en.shootTimer -= dt;
-    if (en.shootTimer <= 0 && en.type !== 'swarmling') {
+    const noShootTypes = ['swarmling', 'saqueador', 'perfurador', 'sapo_venenoso', 'sombra', 'incendiario'];
+    if (en.shootTimer <= 0 && !noShootTypes.includes(en.type)) {
       en.shootTimer = (en.archetype === 'final_overlord' && en.hp < en.maxHp * 0.5) ? en.shootDelay * 0.55 : en.shootDelay;
 
       if (en.type === 'drony') {
@@ -1794,6 +2355,24 @@ function updateEnemies(dt) {
           vx: (player.x - en.x) * 0.15, vy: 40, w: 16, h: 16,
           dmg: en.dmg, arc: true, anim: new Anim('bola'),
         });
+        sfx.enemyShoot();
+      } else if (en.type === 'sentinela') {
+        fireAimedBullet(en, 340, 14, 14);
+        sfx.enemyShoot();
+      } else if (en.type === 'torreta_giratoria') {
+        enemyBullets.push({
+          x: en.x + en.w / 2, y: en.y + en.h / 2,
+          vx: Math.cos(en.spinAngle) * 230, vy: Math.sin(en.spinAngle) * 230,
+          w: 12, h: 12, dmg: en.dmg, anim: new Anim('bola'),
+        });
+        sfx.enemyShoot();
+      } else if (en.type === 'nuvem_toxica') {
+        spawnHazard(en.x + en.w / 2, en.y + en.h / 2, 75, en.dmg, 1.8, 'rgba(120,220,140,ALPHA)');
+        sfx.enemyShoot();
+      } else if (en.type === 'fantasma') {
+        if (en.visible) { fireAimedBullet(en, 260, 14, 14); sfx.enemyShoot(); }
+      } else if (en.type === 'vortice') {
+        fireAimedBullet(en, 240, 14, 14);
         sfx.enemyShoot();
       } else if (en.type === 'boss') {
         fireBossAttack(en);
@@ -1965,6 +2544,7 @@ function updateBullets(dt) {
 
     for (const en of enemies) {
       if (!en.alive) continue;
+      if (en.type === 'fantasma' && !en.visible) continue;
       if (b.hitSet && b.hitSet.has(en)) continue;
       if (overlap(b, en)) {
         en.hp -= b.dmg;
@@ -2265,15 +2845,15 @@ function drawPlayer() {
   const sy = p.y + p.h / 2;
   const alpha = (p.invuln > 0 && Math.floor(p.invuln * 16) % 2 === 0) ? 0.4 : 1;
   const img = p.anim.currentImage();
-  const skinHue = (SKIN_DEFS[save.skin] && SKIN_DEFS[save.skin].hue) || 0;
+  const skinFilter = getSkinFilter(save.skin);
 
   if (p.dashT > 0) {
     for (let i = 1; i <= 3; i++) {
-      drawSprite(img, sx - p.facing * i * 14, sy, SPRITE_DEFS[p.def.key].displayH, p.facing, 0.12 * (4 - i), skinHue);
+      drawSprite(img, sx - p.facing * i * 14, sy, SPRITE_DEFS[p.def.key].displayH, p.facing, 0.12 * (4 - i), skinFilter);
     }
   }
 
-  drawSprite(img, sx, sy, SPRITE_DEFS[p.def.key].displayH, p.facing, alpha, skinHue);
+  drawSprite(img, sx, sy, SPRITE_DEFS[p.def.key].displayH, p.facing, alpha, skinFilter);
 }
 
 function drawEnemies() {
@@ -2283,7 +2863,8 @@ function drawEnemies() {
     const sy = en.y + en.h / 2;
     const flashing = en.hitFlash > 0 && Math.floor(en.hitFlash * 40) % 2 === 0;
     const telegraphing = en.telegraph > 0 && Math.floor(en.telegraph * 20) % 2 === 0;
-    const alpha = flashing ? 0.35 : 1;
+    const ghostFade = en.type === 'fantasma' && !en.visible;
+    const alpha = flashing ? 0.35 : (ghostFade ? 0.18 : 1);
     const img = en.anim.currentImage();
     const displayH = en.boss ? Math.round(70 + Math.min(en.tierScale || 1, 8) * 8) : SPRITE_DEFS[en.spriteKey].displayH;
     const hue = telegraphing ? 0 : (en.hueTint || 0);
@@ -2921,7 +3502,7 @@ function drawHub(dt) {
   // rodapé: personagem atual, loja, menu
   panel(14, H - 62, 200, 48, 8);
   const s = SPRITES[save.charKey];
-  if (s) drawSprite(s.frames[0], 40, H - 38, 34, 1);
+  if (s) drawSprite(s.frames[0], 40, H - 38, 34, 1, 1, getSkinFilter(save.skin));
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 11px monospace';
   ctx.textAlign = 'left';
@@ -3035,12 +3616,8 @@ function drawShop(dt) {
 
       panel(x, y, cardW, cardH, 8, equipped ? 'rgba(255,212,0,0.5)' : undefined);
 
-      ctx.save();
-      const hueShift = skin.animated ? (performance.now() / 15) % 360 : skin.hue;
-      if (hueShift) ctx.filter = `hue-rotate(${hueShift}deg) saturate(1.6)`;
-      const s = SPRITES['Boom'];
-      if (s) drawSprite(s.frames[0], x + cardW / 2, y + 48, 58, 1);
-      ctx.restore();
+      const s = SPRITES[save.charKey];
+      if (s) drawSprite(s.frames[0], x + cardW / 2, y + 48, 58, 1, 1, getSkinFilter(key));
 
       ctx.fillStyle = equipped ? '#ffd400' : '#ddd';
       ctx.font = 'bold 10px monospace';
@@ -3223,6 +3800,7 @@ function frame(now) {
     updatePendingTimeouts(dt);
     updateBullets(dt);
     updatePickups(dt);
+    updateHazards(dt);
     updateWorld(dt);
 
     ctx.save();
@@ -3232,6 +3810,7 @@ function frame(now) {
 
     drawBackground(currentLevelDef, camera.x, worldRebuild);
     drawGround(currentLevelDef, camera.x, worldRebuild);
+    drawHazards(camera.x);
     drawPickups();
     drawEnemies();
     drawPlayer();
