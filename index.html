@@ -201,6 +201,73 @@
     padding: 6px 10px; border-radius: 6px; cursor: pointer; display: none;
   }
   body.logged-in #logoutBtn { display: block; }
+
+  #onlineOverlay {
+    position: absolute; inset: 0; z-index: 40; display: none;
+    background: rgba(10,8,18,0.92); backdrop-filter: blur(3px);
+    font-family: 'Courier New', monospace; color: #eee;
+    flex-direction: column; align-items: center; justify-content: center;
+  }
+  #onlineOverlay.open { display: flex; }
+  #onlineBox {
+    width: min(560px, 92%); height: min(520px, 88%);
+    background: linear-gradient(160deg, #201830, #150f22);
+    border: 2px solid #7c3aed; border-radius: 14px;
+    box-shadow: 0 0 30px rgba(124,58,237,0.5);
+    display: flex; flex-direction: column; padding: 14px 16px;
+  }
+  #onlineBox h2 {
+    margin: 0 0 8px; color: #d9b3ff; letter-spacing: 3px; font-size: 16px;
+    text-shadow: 0 0 8px #7c3aed;
+  }
+  #onlineTabs { display: flex; gap: 6px; margin-bottom: 8px; }
+  #onlineTabs button {
+    flex: 1; padding: 6px; font-size: 11px; font-family: inherit;
+    background: #2a1f40; color: #bbb; border: 1px solid #4a3568;
+    border-radius: 6px; cursor: pointer;
+  }
+  #onlineTabs button.active { background: #7c3aed; color: #fff; }
+  #onlineSearch {
+    width: 100%; padding: 6px 8px; margin-bottom: 8px; box-sizing: border-box;
+    background: #150f22; border: 1px solid #4a3568; border-radius: 6px;
+    color: #eee; font-family: inherit; font-size: 12px;
+  }
+  #onlinePanels { flex: 1; overflow: hidden; position: relative; }
+  .onlinePanel { display: none; height: 100%; flex-direction: column; }
+  .onlinePanel.active { display: flex; }
+  #playerList, #chatLog {
+    flex: 1; overflow-y: auto; background: #150f22; border: 1px solid #332450;
+    border-radius: 8px; padding: 6px; font-size: 12px;
+  }
+  .playerRow {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 8px; border-radius: 6px; margin-bottom: 4px; background: #211838;
+  }
+  .playerRow .pName { color: #ffd400; }
+  .playerRow .pLevel { color: #888; font-size: 10px; }
+  .playerRow button {
+    font-family: inherit; font-size: 10px; padding: 4px 8px; border-radius: 5px;
+    background: #7c3aed; color: #fff; border: none; cursor: pointer;
+  }
+  .chatMsg { margin-bottom: 6px; line-height: 1.4; word-wrap: break-word; }
+  .chatMsg .cName { color: #a78bfa; font-weight: bold; }
+  .chatMsg .cTime { color: #555; font-size: 9px; margin-left: 4px; }
+  #chatInputRow { display: flex; gap: 6px; margin-top: 8px; }
+  #chatInput {
+    flex: 1; padding: 7px 8px; background: #150f22; border: 1px solid #4a3568;
+    border-radius: 6px; color: #eee; font-family: inherit; font-size: 12px;
+  }
+  #chatInputRow button, #onlineCloseBtn {
+    font-family: inherit; font-size: 11px; padding: 7px 12px; border-radius: 6px;
+    background: #7c3aed; color: #fff; border: none; cursor: pointer;
+  }
+  #onlineCloseBtn { align-self: flex-end; margin-top: 8px; background: #3a2a55; }
+  #onlineNickRow { display: flex; gap: 6px; margin-bottom: 8px; }
+  #onlineNickRow input {
+    flex: 1; padding: 6px 8px; background: #150f22; border: 1px solid #4a3568;
+    border-radius: 6px; color: #eee; font-family: inherit; font-size: 12px;
+  }
+  #onlineStatus { font-size: 10px; color: #888; margin-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -219,6 +286,35 @@
       <button id="authSubmitBtn">ENTRAR</button>
       <button class="switchMode" id="authSwitchBtn">não tem conta? cadastre-se</button>
       <div id="authMsg"></div>
+    </div>
+  </div>
+
+  <div id="onlineOverlay">
+    <div id="onlineBox">
+      <h2>TURETY ONLINE</h2>
+      <div id="onlineStatus">conectando...</div>
+      <div id="onlineNickRow">
+        <input type="text" id="onlineNickInput" placeholder="seu apelido" maxlength="16">
+        <button id="onlineNickSaveBtn">SALVAR</button>
+      </div>
+      <div id="onlineTabs">
+        <button id="tabPlayersBtn" class="active">JOGADORES</button>
+        <button id="tabChatBtn">CHAT GLOBAL</button>
+      </div>
+      <div id="onlinePanels">
+        <div id="panelPlayers" class="onlinePanel active">
+          <input type="text" id="onlineSearch" placeholder="buscar jogador...">
+          <div id="playerList"></div>
+        </div>
+        <div id="panelChat" class="onlinePanel">
+          <div id="chatLog"></div>
+          <div id="chatInputRow">
+            <input type="text" id="chatInput" placeholder="mensagem..." maxlength="200">
+            <button id="chatSendBtn">ENVIAR</button>
+          </div>
+        </div>
+      </div>
+      <button id="onlineCloseBtn">FECHAR</button>
     </div>
   </div>
 
@@ -1042,10 +1138,12 @@ window.TuretyAuth.onReady = async (session) => {
     saveLoadedFromCloud = false;
     await loadSaveFromCloud(currentUserId);
     refreshControlModeUI();
+    if (window.TuretyOnline) window.TuretyOnline.start(session.user);
   } else {
     currentUserId = null;
     saveLoadedFromCloud = false;
     loadSave();
+    if (window.TuretyOnline) window.TuretyOnline.stop();
   }
   // 'state' é declarada mais abaixo no arquivo; só reseta pro menu
   // se a máquina de estados já existir (evita erro no primeiro load).
@@ -1053,6 +1151,264 @@ window.TuretyAuth.onReady = async (session) => {
     state = STATE.MENU;
   }
 };
+
+// ============================================================
+// SISTEMA ONLINE: presença, busca de jogadores, chat, ghosts
+// ============================================================
+let onlinePresenceCount = 0;
+(() => {
+  "use strict";
+
+  let presenceChannel = null;   // canal global de presença + chat
+  let levelChannel = null;      // canal por fase (posições em tempo real)
+  let myNick = 'Jogador';
+  let onlinePlayers = {};       // userId -> { nick, level, online_at }
+  let ghosts = {};              // userId -> { nick, x, y, facing, anim, lastSeen }
+  let currentUser = null;
+  let started = false;
+
+  const $ = (id) => document.getElementById(id);
+
+  function loadNick(user) {
+    try {
+      const stored = localStorage.getItem('turety_nick');
+      if (stored) return stored;
+    } catch (e) {}
+    return (user.email || 'Jogador').split('@')[0].slice(0, 16);
+  }
+
+  function saveNick(nick) {
+    try { localStorage.setItem('turety_nick', nick); } catch (e) {}
+  }
+
+  async function start(user) {
+    if (started) return;
+    started = true;
+    currentUser = user;
+    myNick = loadNick(user);
+
+    presenceChannel = supabaseClient.channel('turety-lobby', {
+      config: { presence: { key: user.id }, broadcast: { self: false } }
+    });
+
+    presenceChannel.on('presence', { event: 'sync' }, () => {
+      const state = presenceChannel.presenceState();
+      onlinePlayers = {};
+      for (const key in state) {
+        const entry = state[key][0];
+        onlinePlayers[key] = entry;
+      }
+      onlinePresenceCount = Object.keys(onlinePlayers).length;
+      renderPlayerList();
+    });
+
+    presenceChannel.on('broadcast', { event: 'chat' }, ({ payload }) => {
+      appendChatMessage(payload);
+    });
+
+    presenceChannel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        const lv = (typeof levelFromXP === 'function' && typeof save !== 'undefined')
+          ? levelFromXP(save.totalXP).level : 1;
+        await presenceChannel.track({
+          nick: myNick,
+          level: lv,
+          online_at: new Date().toISOString()
+        });
+        setStatus('conectado ✓');
+        loadRecentChat();
+      }
+    });
+  }
+
+  function stop() {
+    if (presenceChannel) { supabaseClient.removeChannel(presenceChannel); presenceChannel = null; }
+    if (levelChannel) { supabaseClient.removeChannel(levelChannel); levelChannel = null; }
+    onlinePlayers = {};
+    ghosts = {};
+    onlinePresenceCount = 0;
+    started = false;
+  }
+
+  // ---------- chat ----------
+  async function loadRecentChat() {
+    try {
+      const { data, error } = await supabaseClient
+        .from('chat_messages')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (error) throw error;
+      const log = $('chatLog');
+      log.innerHTML = '';
+      (data || []).reverse().forEach(appendChatMessage);
+    } catch (e) {
+      console.warn('não foi possível carregar chat', e);
+    }
+  }
+
+  function appendChatMessage(msg) {
+    const log = $('chatLog');
+    if (!log) return;
+    const div = document.createElement('div');
+    div.className = 'chatMsg';
+    const time = new Date(msg.created_at || Date.now());
+    const hh = String(time.getHours()).padStart(2, '0');
+    const mm = String(time.getMinutes()).padStart(2, '0');
+    div.innerHTML = `<span class="cName">${escapeHtml(msg.nick)}:</span> ${escapeHtml(msg.text)}<span class="cTime">${hh}:${mm}</span>`;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  async function sendChat(text) {
+    text = text.trim();
+    if (!text || !currentUser) return;
+    const msg = { user_id: currentUser.id, nick: myNick, text: text.slice(0, 200) };
+    try {
+      await supabaseClient.from('chat_messages').insert(msg);
+      presenceChannel.send({ type: 'broadcast', event: 'chat', payload: { ...msg, created_at: new Date().toISOString() } });
+    } catch (e) {
+      console.warn('falha ao enviar mensagem', e);
+    }
+  }
+
+  // ---------- lista de jogadores / busca ----------
+  function renderPlayerList(filter) {
+    const list = $('playerList');
+    if (!list) return;
+    filter = (filter || '').toLowerCase();
+    list.innerHTML = '';
+    const entries = Object.entries(onlinePlayers)
+      .filter(([id, p]) => id !== currentUser.id && (!filter || (p.nick || '').toLowerCase().includes(filter)));
+
+    if (entries.length === 0) {
+      list.innerHTML = '<div style="color:#666; padding:10px; text-align:center;">nenhum jogador encontrado</div>';
+      return;
+    }
+    entries.forEach(([id, p]) => {
+      const row = document.createElement('div');
+      row.className = 'playerRow';
+      row.innerHTML = `<div><span class="pName">${escapeHtml(p.nick || '???')}</span> <span class="pLevel">nível ${p.level || 1}</span></div>`;
+      const btn = document.createElement('button');
+      btn.textContent = 'CONVIDAR';
+      btn.onclick = () => {
+        sendChat(`/convite para ${p.nick}: venha jogar comigo! 🎮`);
+        setStatus(`convite enviado para ${p.nick}`);
+      };
+      row.appendChild(btn);
+      list.appendChild(row);
+    });
+  }
+
+  function setStatus(msg) {
+    const el = $('onlineStatus');
+    if (el) el.textContent = msg;
+  }
+
+  // ---------- ghosts (posição em tempo real durante a fase) ----------
+  function joinLevelChannel(levelId) {
+    leaveLevelChannel();
+    ghosts = {};
+    levelChannel = supabaseClient.channel('turety-level-' + levelId, {
+      config: { broadcast: { self: false } }
+    });
+    levelChannel.on('broadcast', { event: 'pos' }, ({ payload }) => {
+      ghosts[payload.id] = { ...payload, lastSeen: performance.now() };
+    });
+    levelChannel.subscribe();
+  }
+
+  function leaveLevelChannel() {
+    if (levelChannel) { supabaseClient.removeChannel(levelChannel); levelChannel = null; }
+    ghosts = {};
+  }
+
+  let lastBroadcast = 0;
+  function broadcastPosition(x, y, facing, anim) {
+    if (!levelChannel || !currentUser) return;
+    const now = performance.now();
+    if (now - lastBroadcast < 80) return; // ~12x/seg
+    lastBroadcast = now;
+    levelChannel.send({
+      type: 'broadcast', event: 'pos',
+      payload: { id: currentUser.id, nick: myNick, x, y, facing, anim, t: now }
+    });
+  }
+
+  function getActiveGhosts() {
+    const now = performance.now();
+    const active = [];
+    for (const id in ghosts) {
+      if (now - ghosts[id].lastSeen > 3000) { delete ghosts[id]; continue; }
+      active.push(ghosts[id]);
+    }
+    return active;
+  }
+
+  // ---------- overlay UI wiring ----------
+  function openOverlay() {
+    $('onlineOverlay').classList.add('open');
+    $('onlineNickInput').value = myNick;
+    renderPlayerList();
+  }
+  function closeOverlay() {
+    $('onlineOverlay').classList.remove('open');
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    $('onlineCloseBtn').addEventListener('click', closeOverlay);
+    $('tabPlayersBtn').addEventListener('click', () => {
+      $('tabPlayersBtn').classList.add('active');
+      $('tabChatBtn').classList.remove('active');
+      $('panelPlayers').classList.add('active');
+      $('panelChat').classList.remove('active');
+    });
+    $('tabChatBtn').addEventListener('click', () => {
+      $('tabChatBtn').classList.add('active');
+      $('tabPlayersBtn').classList.remove('active');
+      $('panelChat').classList.add('active');
+      $('panelPlayers').classList.remove('active');
+    });
+    $('onlineSearch').addEventListener('input', (e) => renderPlayerList(e.target.value));
+    $('onlineNickSaveBtn').addEventListener('click', async () => {
+      const v = $('onlineNickInput').value.trim().slice(0, 16);
+      if (!v) return;
+      myNick = v;
+      saveNick(v);
+      if (presenceChannel) {
+        const lv = (typeof levelFromXP === 'function' && typeof save !== 'undefined')
+          ? levelFromXP(save.totalXP).level : 1;
+        await presenceChannel.track({ nick: myNick, level: lv, online_at: new Date().toISOString() });
+      }
+      setStatus('apelido salvo ✓');
+    });
+    $('chatSendBtn').addEventListener('click', () => {
+      const input = $('chatInput');
+      sendChat(input.value);
+      input.value = '';
+    });
+    $('chatInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { $('chatSendBtn').click(); }
+    });
+  });
+
+  window.TuretyOnline = {
+    start, stop,
+    openOverlay, closeOverlay,
+    joinLevelChannel, leaveLevelChannel,
+    broadcastPosition, getActiveGhosts
+  };
+})();
+
+function openOnlineOverlay() {
+  if (window.TuretyOnline) window.TuretyOnline.openOverlay();
+}
 
 // ============================================================
 // CONQUISTAS
@@ -2218,6 +2574,9 @@ function startLevel(levelDef) {
   cleared = false;
   clearBannerT = 0;
   state = STATE.PLAYING;
+  if (window.TuretyOnline && currentUserId) {
+    window.TuretyOnline.joinLevelChannel(levelDef.id);
+  }
 }
 
 function restartCurrentLevel() {
@@ -2227,6 +2586,7 @@ function restartCurrentLevel() {
 function goToHub() {
   hubPage = Math.floor((save.unlockedLevel - 1) / MINI_BOSS_INTERVAL);
   state = STATE.HUB;
+  if (window.TuretyOnline) window.TuretyOnline.leaveLevelChannel();
 }
 
 // ============================================================
@@ -3110,6 +3470,31 @@ function drawPlayer() {
   drawSprite(img, sx, sy, SPRITE_DEFS[p.def.key].displayH, p.facing, alpha, skinFilter);
 }
 
+function drawGhosts() {
+  if (!window.TuretyOnline) return;
+  const ghosts = window.TuretyOnline.getActiveGhosts();
+  if (!ghosts.length) return;
+  const img = player ? player.anim.currentImage() : null;
+  for (const g of ghosts) {
+    const sx = g.x - camera.x + (player ? player.w / 2 : 16);
+    const sy = g.y + (player ? player.h / 2 : 16);
+    if (sx < -60 || sx > W + 60) continue;
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    if (img && player) {
+      drawSprite(img, sx, sy, SPRITE_DEFS[player.def.key].displayH, g.facing || 1, 0.55, 220);
+    } else {
+      ctx.fillStyle = 'rgba(124,58,237,0.5)';
+      ctx.beginPath(); ctx.arc(sx, sy, 14, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+    ctx.fillStyle = '#d9b3ff';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(g.nick || '???', sx, sy - 34);
+  }
+}
+
 function drawEnemies() {
   for (const en of enemies) {
     if (!en.alive) continue;
@@ -3333,10 +3718,13 @@ function drawClearBanner() {
 // ============================================================
 
 let menuPulse = 0;
+let menuToastMsg = '';
+let menuToastT = 0;
 
 function drawMenu(dt) {
   menuPulse += dt;
   clickables = [];
+  if (menuToastT > 0) menuToastT -= dt;
 
   const grad = ctx.createLinearGradient(0, 0, 0, H);
   grad.addColorStop(0, '#161623');
@@ -3383,12 +3771,29 @@ function drawMenu(dt) {
     `🏆 CONQUISTAS (${save.achievements.length}/${ACHIEVEMENTS.length})`,
     () => { state = STATE.ACHIEVEMENTS; }, { fontSize: 11 });
 
+  button(W / 2 - 110, 366, 220, 30,
+    `🌐 ONLINE${onlinePresenceCount > 0 ? ' (' + onlinePresenceCount + ')' : ''}`,
+    () => {
+      if (!currentUserId) {
+        menuToastMsg = 'entre na sua conta para jogar online';
+        menuToastT = 2.4;
+        return;
+      }
+      openOnlineOverlay();
+    }, { fontSize: 11 });
+
   // resumo de progresso salvo
   if (save.totalXP > 0 || save.money > 0) {
     const lv = levelFromXP(save.totalXP);
     ctx.fillStyle = '#888';
     ctx.font = '11px monospace';
-    ctx.fillText(`nível ${lv.level} · ${save.money} moedas · fase ${save.unlockedLevel}/${TOTAL_LEVELS} desbloqueada`, W / 2, 375);
+    ctx.fillText(`nível ${lv.level} · ${save.money} moedas · fase ${save.unlockedLevel}/${TOTAL_LEVELS} desbloqueada`, W / 2, 406);
+  }
+
+  if (menuToastT > 0) {
+    ctx.fillStyle = `rgba(255,120,120,${Math.min(1, menuToastT)})`;
+    ctx.font = '11px monospace';
+    ctx.fillText(menuToastMsg, W / 2, 424);
   }
 
   // botão de mute
@@ -4066,12 +4471,17 @@ function frame(now) {
     drawGround(currentLevelDef, camera.x, worldRebuild);
     drawHazards(camera.x);
     drawPickups();
+    drawGhosts();
     drawEnemies();
     drawPlayer();
     drawBullets();
     drawParticles();
     drawPopups();
     ctx.restore();
+
+    if (window.TuretyOnline && player) {
+      window.TuretyOnline.broadcastPosition(player.x, player.y, player.facing, player.anim ? player.anim.key : null);
+    }
 
     drawHUD(dt);
     drawClearBanner();
